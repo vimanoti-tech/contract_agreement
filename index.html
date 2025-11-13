@@ -45,7 +45,7 @@
         .contract-preview {
             font-family: 'Times New Roman', serif;
             line-height: 1.4;
-            font-size: 12pt; /* Requested: Times New Roman, 12 */
+            font-size: 12pt;
         }
         .contract-preview h1, .contract-preview h2, .contract-preview h3 {
             font-weight: bold;
@@ -93,13 +93,34 @@
         .organization-field {
             display: none;
         }
-        /* Signature image in contract: remove margin and ensure white background */
+        .birthday-field {
+            display: none;
+        }
         .contract-preview .signature-image {
             margin: 0 !important;
             border: none !important;
             background: #ffffff !important;
             display: block;
             max-height: 64px;
+        }
+        .birthday-person {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: #f9fafb;
+        }
+        .remove-birthday-person {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .remove-birthday-person:hover {
+            background: #dc2626;
         }
     </style>
 </head>
@@ -147,6 +168,27 @@
                 <div id="organization-field" class="organization-field">
                     <label for="organization" class="block text-sm font-bold text-gray-700">Organisation/Institution <span class="text-red-500">*</span></label>
                     <input type="text" id="organization" name="organization" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                </div>
+                
+                <!-- Birthday Person Field -->
+                <div id="birthday-field" class="birthday-field">
+                    <label class="block text-sm font-bold text-gray-700">Birthday Person(s) <span class="text-red-500">*</span></label>
+                    <p class="text-sm text-gray-500 mb-3">Add the name and date of birth for each birthday person</p>
+                    <div id="birthday-persons-container">
+                        <div class="birthday-person">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                                    <input type="text" name="birthday-name[]" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Date of Birth <span class="text-red-500">*</span></label>
+                                    <input type="text" name="birthday-dob[]" required class="birthday-dob mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="add-birthday-person" class="mt-2 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm">Add Another Birthday Person</button>
                 </div>
                 
                 <!-- Event Type -->
@@ -294,1041 +336,1225 @@
     </div>
 
     <script>
-        // Initialize date picker
-        // Initialize date picker with a helper that can restrict weekends for school trips
-        function setDatePickerForEventType(eventType) {
-            const dateInput = document.getElementById('event-date');
-            if (!dateInput) return;
-            // Destroy existing instance if present
-            if (dateInput._flatpickr) {
-                dateInput._flatpickr.destroy();
-            }
+    // Google Apps Script URL - MAKE SURE THIS IS CORRECT
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJIF7MS8aeIuzjmd8-HmsWsxGSpNWMwgDTJ1Qk8_X-za8MFKdmLXQPzE6fdsUfmQd-/exec';
 
-            const baseConfig = {
-                minDate: "today",
-                dateFormat: "Y-m-d"
-            };
-
-            if (eventType === 'school-trip') {
-                // disable weekends (Saturday = 6, Sunday = 0)
-                baseConfig.disable = [function(date) {
-                    const day = date.getDay();
-                    return day === 0 || day === 6;
-                }];
-            }
-
-            flatpickr(dateInput, baseConfig);
+    // Initialize date picker
+    function setDatePickerForEventType(eventType) {
+        const dateInput = document.getElementById('event-date');
+        if (!dateInput) return;
+        // Destroy existing instance if present
+        if (dateInput._flatpickr) {
+            dateInput._flatpickr.destroy();
         }
 
-        // Initialize with default (no special restrictions)
-        setDatePickerForEventType('');
-        
-        // Initialize time pickers
-        const startTimePicker = flatpickr("#start-time", {
-            enableTime: true,
-            noCalendar: true,
-            dateFormat: "H:i",
-            time_24hr: true,
-            onChange: function(selectedDates, dateStr, instance) {
-                updateEndTime();
-            }
-        });
-        
-        const endTimePicker = flatpickr("#end-time", {
-            enableTime: true,
-            noCalendar: true,
-            dateFormat: "H:i",
-            time_24hr: true
-        });
-
-        // Initialize signature pad (pen color set to blue)
-        const canvas = document.getElementById("signature-pad");
-        const signaturePad = new SignaturePad(canvas, { penColor: '#0078ff' });
-
-        function resizeCanvas() {
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            canvas.width = canvas.offsetWidth * ratio;
-            canvas.height = canvas.offsetHeight * ratio;
-            canvas.getContext("2d").scale(ratio, ratio);
-            signaturePad.clear();
-        }
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
-
-        document.getElementById("clear").addEventListener("click", () => signaturePad.clear());
-        document.getElementById("save").addEventListener("click", () => {
-            if (signaturePad.isEmpty()) {
-                alert("Please provide a signature first.");
-            } else {
-                const dataURL = signaturePad.toDataURL(); // PNG Base64 image
-                console.log(dataURL); // You can upload or attach this to a form
-                alert("Signature captured!");
-            }
-        });
-
-        // Facility to Till Number mapping
-        const facilityTillNumbers = {
-            "Village Bowl": "5541291",
-            "Under the Sea": "9840427",
-            "Ozone Trampoline Park": "9840429",
-            "Mini-Golf": "9840415",
-            "REV": "9840417",
-            "Glitch": "9840425",
-            "Ballpoint": "9840423"
+        const baseConfig = {
+            minDate: "today",
+            dateFormat: "Y-m-d"
         };
 
-        // Facility to Package mapping
-        const facilityPackages = {
-            "Under the Sea": [
-                { name: "Immersive Delights - Beach Party", cost: 2600 },
-                { name: "Kiddie Fiesta - Let's Par Tee", cost: 2400 }
-            ],
-            "Ozone Trampoline Park": [
-                { name: "Kiddie Fiesta - Jump Party", cost: 2400 },
-                { name: "Teen Spirit - Let's Par Tee", cost: 1500 }
-            ],
-            "Village Bowl": [
-                { name: "Immersive Delights - King Pin Party", cost: 2600 },
-                { name: "Kiddie Fiesta - King Pin Party", cost: 2400 },
-                { name: "Big Kids Bliss - King Pin Party", cost: 1500 }
-            ],
-            "Glitch": [
-                { name: "Immersive Delights - Game On", cost: 2600 },
-                { name: "Teen Spirit - Game On", cost: 1500 }
-            ],
-            "REV": [
-                { name: "Teen Spirit - Power Up", cost: 1500 }
-            ],
-            "Mini-Golf": [
-                { name: "Big Kids Bliss - Game On", cost: 1500 }
-            ],
-            "Ballpoint": [
-                { name: "Big Kids Bliss - Let's Par Tee", cost: 1500 }
-            ]
-        };
-
-        // Hangout Packages
-        const hangoutPackages = {
-            "Facility Package": 1740,
-            "Half Day Team Building": 4408,
-            "Full Day Team Building": 7308
-        };
-
-        // School Trip Package Costs
-        const schoolTripCosts = {
-            play: {
-                "Ozone Trampoline Park": 500,
-                "Under the Sea": 500,
-                "Mini-Golf": 300,
-                "Village Bowl": 300,
-                "REV": 500,
-                "Glitch": 500,
-                "Ballpoint": 300
-            },
-            eat: 370,
-            learn: 300,
-            drinks: 100
-        };
-
-        // Event listeners for form logic
-        document.getElementById('event-type').addEventListener('change', function() {
-            updateOrganizationField();
-            updateTimeSlotOptions();
-            updatePackageOptions();
-            updateSchoolTripOptions();
-        });
-
-        document.getElementById('facility').addEventListener('change', function() {
-            updatePackageOptions();
-            updateSchoolTripCost();
-        });
-
-        // Time slot selection event listeners
-        document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                applyTimeSlot();
-            });
-        });
-
-        // Update organization field based on event type
-        function updateOrganizationField() {
-            const eventType = document.getElementById('event-type').value;
-            const organizationField = document.getElementById('organization-field');
-            const organizationInput = document.getElementById('organization');
-            
-            if (eventType === 'school-trip' || eventType === 'hangout') {
-                organizationField.style.display = 'block';
-                organizationInput.required = true;
-            } else {
-                organizationField.style.display = 'none';
-                organizationInput.required = false;
-                organizationInput.value = '';
-            }
+        if (eventType === 'school-trip') {
+            // disable weekends (Saturday = 6, Sunday = 0)
+            baseConfig.disable = [function(date) {
+                const day = date.getDay();
+                return day === 0 || day === 6;
+            }];
         }
 
-        // Update time slot options based on event type
-        function updateTimeSlotOptions() {
-            const eventType = document.getElementById('event-type').value;
-            const timeSlotOptions = document.getElementById('time-slot-options');
-            const birthdaySlots = document.getElementById('birthday-slots');
-            const schoolTripSlots = document.getElementById('school-trip-slots');
-            
-            // Reset time fields
-            document.getElementById('start-time').value = '';
-            document.getElementById('end-time').value = '';
-            
-            // Clear any selected time slots
-            document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
-                radio.checked = false;
-            });
-            
-            if (eventType === 'birthday') {
-                timeSlotOptions.style.display = 'block';
-                birthdaySlots.classList.remove('hidden');
-                schoolTripSlots.classList.add('hidden');
-                document.getElementById('start-time').setAttribute('readonly', 'true');
-                document.getElementById('end-time').setAttribute('readonly', 'true');
-            } else if (eventType === 'school-trip') {
-                timeSlotOptions.style.display = 'block';
-                birthdaySlots.classList.add('hidden');
-                schoolTripSlots.classList.remove('hidden');
-                document.getElementById('start-time').setAttribute('readonly', 'true');
-                document.getElementById('end-time').setAttribute('readonly', 'true');
-                // Restrict date picker to weekdays for school trips
-                setDatePickerForEventType('school-trip');
-            } else if (eventType === 'hangout') {
-                timeSlotOptions.style.display = 'none';
-                birthdaySlots.classList.add('hidden');
-                schoolTripSlots.classList.add('hidden');
-                // For hangout events, enable start time input
-                document.getElementById('start-time').removeAttribute('readonly');
-                document.getElementById('end-time').setAttribute('readonly', 'true');
-            } else {
-                timeSlotOptions.style.display = 'none';
-                birthdaySlots.classList.add('hidden');
-                schoolTripSlots.classList.add('hidden');
-                // For other events, enable both time inputs
-                document.getElementById('start-time').removeAttribute('readonly');
-                document.getElementById('end-time').removeAttribute('readonly');
-            }
-            // For non-school-trip event types, use default datepicker
-            if (eventType !== 'school-trip') setDatePickerForEventType('');
+        flatpickr(dateInput, baseConfig);
+    }
+
+    // Initialize with default (no special restrictions)
+    setDatePickerForEventType('');
+    
+    // Initialize time pickers
+    const startTimePicker = flatpickr("#start-time", {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",
+        time_24hr: true,
+        onChange: function(selectedDates, dateStr, instance) {
+            updateEndTime();
         }
-
-        // Apply selected time slot
-        function applyTimeSlot() {
-            const eventType = document.getElementById('event-type').value;
-            const selectedSlot = document.querySelector('input[name="time-slot"]:checked');
-            
-            if (!selectedSlot) return;
-            
-            if (eventType === 'birthday') {
-                if (selectedSlot.value === 'morning') {
-                    document.getElementById('start-time').value = '10:00';
-                    document.getElementById('end-time').value = '13:00';
-                } else if (selectedSlot.value === 'afternoon') {
-                    document.getElementById('start-time').value = '14:30';
-                    document.getElementById('end-time').value = '17:30';
-                }
-            } else if (eventType === 'school-trip') {
-                if (selectedSlot.value === 'morning') {
-                    document.getElementById('start-time').value = '10:00';
-                    document.getElementById('end-time').value = '12:00';
-                } else if (selectedSlot.value === 'afternoon') {
-                    document.getElementById('start-time').value = '12:00';
-                    document.getElementById('end-time').value = '14:00';
-                }
-            }
-        }
-
-        // Update end time for hangout events
-        function updateEndTime() {
-            const eventType = document.getElementById('event-type').value;
-            
-            if (eventType === 'hangout') {
-                const startTime = document.getElementById('start-time').value;
-                if (startTime) {
-                    const [hours, minutes] = startTime.split(':').map(Number);
-                    let endHours = hours + 3;
-                    
-                    // Handle day rollover
-                    if (endHours >= 24) {
-                        endHours -= 24;
-                    }
-                    
-                    // Format to two digits
-                    const formattedEndHours = endHours.toString().padStart(2, '0');
-                    const formattedEndMinutes = minutes.toString().padStart(2, '0');
-                    
-                    document.getElementById('end-time').value = `${formattedEndHours}:${formattedEndMinutes}`;
-                }
-            }
-        }
-
-        // Update package options based on facility and event type
-        function updatePackageOptions() {
-            const eventType = document.getElementById('event-type').value;
-            const facility = document.getElementById('facility').value;
-            const packageSelect = document.getElementById('package');
-            
-            // Clear existing options
-            packageSelect.innerHTML = '<option value="">Select Package</option>';
-            
-            if (eventType === 'school-trip') {
-                // For school trips, we'll handle package selection differently
-                packageSelect.style.display = 'none';
-                // Remove required attribute for school trips
-                packageSelect.required = false;
-                document.getElementById('school-trip-options').style.display = 'block';
-                updateSchoolTripCost();
-            } else if (eventType === 'hangout') {
-                packageSelect.style.display = 'block';
-                packageSelect.required = true;
-                document.getElementById('school-trip-options').style.display = 'none';
-                
-                // Add hangout packages
-                for (const [packageName, cost] of Object.entries(hangoutPackages)) {
-                    const option = document.createElement('option');
-                    option.value = packageName;
-                    option.textContent = packageName;
-                    option.dataset.cost = cost;
-                    packageSelect.appendChild(option);
-                }
-                
-                // Set default package and cost
-                packageSelect.value = "Facility Package";
-                document.getElementById('cost-per-person').value = hangoutPackages["Facility Package"];
-            } else {
-                packageSelect.style.display = 'block';
-                packageSelect.required = true;
-                document.getElementById('school-trip-options').style.display = 'none';
-                
-                // Add packages based on facility
-                if (facility && facilityPackages[facility]) {
-                    facilityPackages[facility].forEach(pkg => {
-                        const option = document.createElement('option');
-                        option.value = pkg.name;
-                        option.textContent = pkg.name;
-                        option.dataset.cost = pkg.cost;
-                        packageSelect.appendChild(option);
-                    });
-                    
-                    // Set default package and cost
-                    if (facilityPackages[facility].length > 0) {
-                        packageSelect.value = facilityPackages[facility][0].name;
-                        document.getElementById('cost-per-person').value = facilityPackages[facility][0].cost;
-                    }
-                }
-            }
-        }
-
-        // Update package selection visibility for school trips
-        function updateSchoolTripOptions() {
-            const eventType = document.getElementById('event-type').value;
-            const schoolTripOptions = document.getElementById('school-trip-options');
-            
-            if (eventType === 'school-trip') {
-                schoolTripOptions.style.display = 'block';
-                document.getElementById('package').style.display = 'none';
-                
-                // Add event listeners to school trip checkboxes
-                const checkboxes = document.querySelectorAll('input[name="school-package"]');
-                checkboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', updateSchoolTripCost);
-                });
-            } else {
-                schoolTripOptions.style.display = 'none';
-                document.getElementById('package').style.display = 'block';
-            }
-        }
-
-        // Calculate school trip cost based on selected options
-        function updateSchoolTripCost() {
-            const eventType = document.getElementById('event-type').value;
-            if (eventType !== 'school-trip') return;
-            
-            const facility = document.getElementById('facility').value;
-            const checkboxes = document.querySelectorAll('input[name="school-package"]:checked');
-            let totalCost = 0;
-            
-            checkboxes.forEach(checkbox => {
-                if (checkbox.value === 'play') {
-                    totalCost += schoolTripCosts.play[facility] || 0;
-                } else if (checkbox.value === 'eat') {
-                    totalCost += schoolTripCosts.eat;
-                } else if (checkbox.value === 'learn') {
-                    totalCost += schoolTripCosts.learn;
-                } else if (checkbox.value === 'drinks') {
-                    totalCost += schoolTripCosts.drinks || 0;
-                }
-            });
-            
-            document.getElementById('cost-per-person').value = totalCost;
-        }
-
-        // Package selection change handler
-        document.getElementById('package').addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption && selectedOption.dataset.cost) {
-                document.getElementById('cost-per-person').value = selectedOption.dataset.cost;
-            }
-        });
-
-        // Submit booking data to Google Sheets (working user-provided implementation)
-async function submitToGoogleSheets(formData) {
-  // 🚨 Replace this with your DEPLOYED Web App URL (not the googleusercontent.com one)
-  const scriptURL = 'https://script.google.com/macros/s/AKfycbzWNlkxrSptew8jTZDgwJz95xnN60X7hSWCf82VfHW1SI07ScxqB7WlcmhOsADkGmLX/exec';
-
-  // Prepare the payload — matches the keys in your doPost() handler
-  const data = {
-    'Timestamp': new Date().toISOString(),
-    'Event Date': formData.get('event-date') || '',
-    'Package': formData.get('package') || getSchoolTripPackageSelections() || '',
-    'Facility': formData.get('facility') || '',
-    'Event Type': document.getElementById('event-type').options[
-      document.getElementById('event-type').selectedIndex
-    ].text || '',
-    'Client Name': formData.get('client-name') || '',
-    'Contact Number': formData.get('contact') || '',
-    'Email Address': formData.get('email') || '',
-    'Organisation': formData.get('organization') || 'N/A',
-    'Start Time': formData.get('start-time') || '',
-    'Attendees': formData.get('attendees') || '',
-    'Notes': formData.get('notes') || 'None'
-  };
-
-  console.log('📤 Submitting data to Google Sheets:', data);
-
-  try {
-    const response = await fetch(scriptURL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+    });
+    
+    const endTimePicker = flatpickr("#end-time", {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",
+        time_24hr: true
     });
 
-    console.log('📨 Response status:', response.status);
+    // Initialize signature pad (pen color set to blue)
+    const canvas = document.getElementById("signature-pad");
+    const signaturePad = new SignaturePad(canvas, { penColor: '#0078ff' });
 
-    const text = await response.text();
-    console.log('📄 Raw response:', text);
-
-    // Try to parse JSON response from Apps Script
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch {
-      console.warn('⚠️ Could not parse JSON response, treating as plain text.');
-      alert('✅ Booking submitted! (Response format unexpected)');
-      return true;
+    function resizeCanvas() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        signaturePad.clear();
     }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
-    if (result.result === 'success') {
-      alert('✅ Booking submitted successfully! Data saved to Google Sheets.');
-      return true;
-    } else if (result.result === 'warning') {
-      alert('⚠️ ' + (result.message || 'Data submitted with warnings'));
-      return true;
-    } else {
-      alert('❌ Submission failed: ' + (result.message || 'Unknown error'));
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ Network or fetch error:', error);
-    alert('❌ Network error. Please check your connection and try again.');
-    return false;
-  }
-}
-
-
-        // Helper function to get school trip package selections
-        function getSchoolTripPackageSelections() {
-            const eventType = document.getElementById('event-type').value;
-            if (eventType !== 'school-trip') return '';
-            
-            const selectedPackages = Array.from(document.querySelectorAll('input[name="school-package"]:checked'))
-                .map(checkbox => {
-                    switch(checkbox.value) {
-                        case 'play': return 'Play';
-                        case 'eat': return 'Eat';
-                        case 'learn': return 'Learn';
-                        case 'drinks': return 'Drinks';
-                        default: return checkbox.value;
-                    }
-                });
-            
-            return selectedPackages.join(', ') || 'None';
+    document.getElementById("clear").addEventListener("click", () => signaturePad.clear());
+    document.getElementById("save").addEventListener("click", () => {
+        if (signaturePad.isEmpty()) {
+            alert("Please provide a signature first.");
+        } else {
+            const dataURL = signaturePad.toDataURL();
+            console.log(dataURL);
+            alert("Signature captured!");
         }
+    });
 
-        // Update the submitBookingInquiry function to include Google Sheets submission
-        function submitBookingInquiry() {
-            // Validate form
-            const eventType = document.getElementById('event-type').value;
-            let isValid = true;
-            
-            // Get all required fields
-            const requiredFields = document.querySelectorAll('#booking-form [required]');
-            
-            requiredFields.forEach(field => {
-                // Skip validation for package field if it's a school trip
-                if (eventType === 'school-trip' && field.id === 'package') {
-                    return;
-                }
-                
-                if (!field.value.trim()) {
-                    isValid = false;
-                    field.classList.add('border-red-500');
-                } else {
-                    field.classList.remove('border-red-500');
-                }
-            });
-            
-            // Special validation for school trip - at least one package option must be selected
-            if (eventType === 'school-trip') {
-                const schoolPackageCheckboxes = document.querySelectorAll('input[name="school-package"]:checked');
-                if (schoolPackageCheckboxes.length === 0) {
-                    isValid = false;
-                    alert('Please select at least one school trip package option');
-                    return;
-                }
-            }
-            
-            // Validate signature
-            if (signaturePad.isEmpty()) {
-                isValid = false;
-                alert('Please provide your signature');
-                return;
-            }
-            
-            if (!isValid) {
-                alert('Please fill in all required fields');
-                return;
-            }
-            
-            // Get form data
-            const formData = new FormData(document.getElementById('booking-form'));
-
-            // Submit to Google Sheets first, then generate contract
-            submitToGoogleSheets(formData).then(success => {
-                if (success) {
-                    // Generate contract
-                    generateContract();
-
-                    // Show contract container
-                    document.getElementById('contract-container').style.display = 'block';
-
-                    // Scroll to contract
-                    document.getElementById('contract-container').scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    // Submission failed; do not generate contract
-                    console.warn('Google Sheets submission failed; contract generation aborted.');
-                }
-            });
-        }
-
-        function generateContract() {
-            const formData = new FormData(document.getElementById('booking-form'));
-            const contractContent = document.getElementById('contract-content');
-            const eventType = document.getElementById('event-type').value;
-            
-            // Format date for display
-            const eventDate = new Date(formData.get('event-date'));
-            const formattedEventDate = eventDate.toLocaleDateString('en-GB', {
-                day: 'numeric', month: 'long', year: 'numeric'
-            });
-            
-            const currentDate = new Date();
-            const formattedCurrentDate = currentDate.toLocaleDateString('en-GB', {
-                day: 'numeric', month: 'long', year: 'numeric'
-            });
-            
-            // Get facility for designation and till number
-            const facility = document.getElementById('facility').value;
-            const tillNumber = facilityTillNumbers[facility] || '';
-            
-            // Generate contract based on event type
-            if (eventType === 'birthday') {
-                generateBirthdayContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
-            } else if (eventType === 'school-trip') {
-                generateSchoolTripContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
+    // Add birthday person functionality
+    document.getElementById('add-birthday-person').addEventListener('click', function() {
+        const container = document.getElementById('birthday-persons-container');
+        const newPerson = document.createElement('div');
+        newPerson.className = 'birthday-person';
+        newPerson.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="birthday-name[]" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Date of Birth <span class="text-red-500">*</span></label>
+                    <input type="text" name="birthday-dob[]" required class="birthday-dob mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                </div>
+            </div>
+            <button type="button" class="remove-birthday-person mt-2 bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded-md text-xs">Remove</button>
+        `;
+        container.appendChild(newPerson);
+        
+        // Initialize date picker for new DOB field
+        flatpickr(newPerson.querySelector('.birthday-dob'), {
+            dateFormat: "Y-m-d",
+            maxDate: "today"
+        });
+        
+        // Add remove functionality
+        newPerson.querySelector('.remove-birthday-person').addEventListener('click', function() {
+            if (document.querySelectorAll('.birthday-person').length > 1) {
+                container.removeChild(newPerson);
             } else {
-                generateEventsContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
+                alert('At least one birthday person is required.');
+            }
+        });
+    });
+
+    // Initialize DOB date pickers for existing fields
+    document.querySelectorAll('.birthday-dob').forEach(input => {
+        flatpickr(input, {
+            dateFormat: "Y-m-d",
+            maxDate: "today"
+        });
+    });
+
+    // Facility to Till Number mapping
+    const facilityTillNumbers = {
+        "Village Bowl": "5541291",
+        "Under the Sea": "9840427",
+        "Ozone Trampoline Park": "9840429",
+        "Mini-Golf": "9840415",
+        "REV": "9840417",
+        "Glitch": "9840425",
+        "Ballpoint": "9840423"
+    };
+
+    // Facility to Package mapping
+    const facilityPackages = {
+        "Under the Sea": [
+            { name: "Immersive Delights - Beach Party", cost: 2600 },
+            { name: "Kiddie Fiesta - Let's Par Tee", cost: 2400 }
+        ],
+        "Ozone Trampoline Park": [
+            { name: "Kiddie Fiesta - Jump Party", cost: 2400 },
+            { name: "Teen Spirit - Let's Par Tee", cost: 1500 }
+        ],
+        "Village Bowl": [
+            { name: "Immersive Delights - King Pin Party", cost: 2600 },
+            { name: "Kiddie Fiesta - King Pin Party", cost: 2400 },
+            { name: "Big Kids Bliss - King Pin Party", cost: 1500 }
+        ],
+        "Glitch": [
+            { name: "Immersive Delights - Game On", cost: 2600 },
+            { name: "Teen Spirit - Game On", cost: 1500 }
+        ],
+        "REV": [
+            { name: "Teen Spirit - Power Up", cost: 1500 }
+        ],
+        "Mini-Golf": [
+            { name: "Big Kids Bliss - Game On", cost: 1500 }
+        ],
+        "Ballpoint": [
+            { name: "Big Kids Bliss - Let's Par Tee", cost: 1500 }
+        ]
+    };
+
+    // Hangout Packages
+    const hangoutPackages = {
+        "Facility Package": 1740,
+        "Half Day Team Building": 4408,
+        "Full Day Team Building": 7308
+    };
+
+    // School Trip Package Costs
+    const schoolTripCosts = {
+        play: {
+            "Ozone Trampoline Park": 500,
+            "Under the Sea": 500,
+            "Mini-Golf": 300,
+            "Village Bowl": 300,
+            "REV": 500,
+            "Glitch": 500,
+            "Ballpoint": 300
+        },
+        eat: 370,
+        learn: 300,
+        drinks: 100
+    };
+
+    // Event listeners for form logic
+    document.getElementById('event-type').addEventListener('change', function() {
+        updateOrganizationField();
+        updateBirthdayField();
+        updateTimeSlotOptions();
+        updatePackageOptions();
+        updateSchoolTripOptions();
+    });
+
+    document.getElementById('facility').addEventListener('change', function() {
+        updatePackageOptions();
+        updateSchoolTripCost();
+    });
+
+    // Time slot selection event listeners
+    document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            applyTimeSlot();
+        });
+    });
+
+    // Update organization field based on event type
+    function updateOrganizationField() {
+        const eventType = document.getElementById('event-type').value;
+        const organizationField = document.getElementById('organization-field');
+        const organizationInput = document.getElementById('organization');
+        
+        if (eventType === 'school-trip' || eventType === 'hangout') {
+            organizationField.style.display = 'block';
+            organizationInput.required = true;
+        } else {
+            organizationField.style.display = 'none';
+            organizationInput.required = false;
+            organizationInput.value = '';
+        }
+    }
+
+    // Update birthday field based on event type
+    function updateBirthdayField() {
+        const eventType = document.getElementById('event-type').value;
+        const birthdayField = document.getElementById('birthday-field');
+        
+        if (eventType === 'birthday') {
+            birthdayField.style.display = 'block';
+            // Make birthday fields required
+            document.querySelectorAll('input[name="birthday-name[]"]').forEach(input => input.required = true);
+            document.querySelectorAll('input[name="birthday-dob[]"]').forEach(input => input.required = true);
+        } else {
+            birthdayField.style.display = 'none';
+            // Remove required attribute
+            document.querySelectorAll('input[name="birthday-name[]"]').forEach(input => input.required = false);
+            document.querySelectorAll('input[name="birthday-dob[]"]').forEach(input => input.required = false);
+        }
+    }
+
+    // Update time slot options based on event type
+    function updateTimeSlotOptions() {
+        const eventType = document.getElementById('event-type').value;
+        const timeSlotOptions = document.getElementById('time-slot-options');
+        const birthdaySlots = document.getElementById('birthday-slots');
+        const schoolTripSlots = document.getElementById('school-trip-slots');
+        
+        // Reset time fields
+        document.getElementById('start-time').value = '';
+        document.getElementById('end-time').value = '';
+        
+        // Clear any selected time slots
+        document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
+            radio.checked = false;
+        });
+        
+        if (eventType === 'birthday') {
+            timeSlotOptions.style.display = 'block';
+            birthdaySlots.classList.remove('hidden');
+            schoolTripSlots.classList.add('hidden');
+            document.getElementById('start-time').setAttribute('readonly', 'true');
+            document.getElementById('end-time').setAttribute('readonly', 'true');
+        } else if (eventType === 'school-trip') {
+            timeSlotOptions.style.display = 'block';
+            birthdaySlots.classList.add('hidden');
+            schoolTripSlots.classList.remove('hidden');
+            document.getElementById('start-time').setAttribute('readonly', 'true');
+            document.getElementById('end-time').setAttribute('readonly', 'true');
+            // Restrict date picker to weekdays for school trips
+            setDatePickerForEventType('school-trip');
+        } else if (eventType === 'hangout') {
+            timeSlotOptions.style.display = 'none';
+            birthdaySlots.classList.add('hidden');
+            schoolTripSlots.classList.add('hidden');
+            // For hangout events, enable start time input
+            document.getElementById('start-time').removeAttribute('readonly');
+            document.getElementById('end-time').setAttribute('readonly', 'true');
+        } else {
+            timeSlotOptions.style.display = 'none';
+            birthdaySlots.classList.add('hidden');
+            schoolTripSlots.classList.add('hidden');
+            // For other events, enable both time inputs
+            document.getElementById('start-time').removeAttribute('readonly');
+            document.getElementById('end-time').removeAttribute('readonly');
+        }
+        // For non-school-trip event types, use default datepicker
+        if (eventType !== 'school-trip') setDatePickerForEventType('');
+    }
+
+    // Apply selected time slot
+    function applyTimeSlot() {
+        const eventType = document.getElementById('event-type').value;
+        const selectedSlot = document.querySelector('input[name="time-slot"]:checked');
+        
+        if (!selectedSlot) return;
+        
+        if (eventType === 'birthday') {
+            if (selectedSlot.value === 'morning') {
+                document.getElementById('start-time').value = '10:00';
+                document.getElementById('end-time').value = '13:00';
+            } else if (selectedSlot.value === 'afternoon') {
+                document.getElementById('start-time').value = '14:30';
+                document.getElementById('end-time').value = '17:30';
+            }
+        } else if (eventType === 'school-trip') {
+            if (selectedSlot.value === 'morning') {
+                document.getElementById('start-time').value = '10:00';
+                document.getElementById('end-time').value = '12:00';
+            } else if (selectedSlot.value === 'afternoon') {
+                document.getElementById('start-time').value = '12:00';
+                document.getElementById('end-time').value = '14:00';
+            }
+        }
+    }
+
+    // Update end time for hangout events
+    function updateEndTime() {
+        const eventType = document.getElementById('event-type').value;
+        
+        if (eventType === 'hangout') {
+            const startTime = document.getElementById('start-time').value;
+            if (startTime) {
+                const [hours, minutes] = startTime.split(':').map(Number);
+                let endHours = hours + 3;
+                
+                // Handle day rollover
+                if (endHours >= 24) {
+                    endHours -= 24;
+                }
+                
+                // Format to two digits
+                const formattedEndHours = endHours.toString().padStart(2, '0');
+                const formattedEndMinutes = minutes.toString().padStart(2, '0');
+                
+                document.getElementById('end-time').value = `${formattedEndHours}:${formattedEndMinutes}`;
+            }
+        }
+    }
+
+    // Update package options based on facility and event type
+    function updatePackageOptions() {
+        const eventType = document.getElementById('event-type').value;
+        const facility = document.getElementById('facility').value;
+        const packageSelect = document.getElementById('package');
+        
+        // Clear existing options
+        packageSelect.innerHTML = '<option value="">Select Package</option>';
+        
+        if (eventType === 'school-trip') {
+            // For school trips, we'll handle package selection differently
+            packageSelect.style.display = 'none';
+            // Remove required attribute for school trips
+            packageSelect.required = false;
+            document.getElementById('school-trip-options').style.display = 'block';
+            updateSchoolTripCost();
+        } else if (eventType === 'hangout') {
+            packageSelect.style.display = 'block';
+            packageSelect.required = true;
+            document.getElementById('school-trip-options').style.display = 'none';
+            
+            // Add hangout packages
+            for (const [packageName, cost] of Object.entries(hangoutPackages)) {
+                const option = document.createElement('option');
+                option.value = packageName;
+                option.textContent = packageName;
+                option.dataset.cost = cost;
+                packageSelect.appendChild(option);
             }
             
-            // Set up download button
-            document.getElementById('download-contract').onclick = function() {
-                downloadContract();
-            };
-        }
-
-        // Helper: convert 24-hour 'HH:MM' to 'h:mm AM/PM'
-        function formatTimeToAMPM(timeStr) {
-            if (!timeStr) return '';
-            // Accept formats like '10:00' or '14:30'
-            const parts = timeStr.split(':');
-            if (parts.length < 2) return timeStr;
-            let hours = parseInt(parts[0], 10);
-            const minutes = parts[1];
-            const suffix = hours >= 12 ? 'PM' : 'AM';
-            hours = ((hours + 11) % 12) + 1; // convert 0->12
-            return hours + ':' + minutes + ' ' + suffix;
-        }
-
-        function generateBirthdayContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
-            // Create birthday contract HTML
-            const contractHTML = `
-                <div class="space-y-4">
-                    <div class="text-center mb-6">
-                        <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION AGREEMENT</h1>
-                        <p>This agreement is entered into on this ${formattedCurrentDate}</p>
-                        <p>by and between Hameco Limited of P. O. Box 200 – 00621, Village Market, Nairobi Hereinafter
-                        referred to as "Venue" and ${formData.get('client-name')}, hereinafter referred to as "Client".</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">1. Event Description:</h2>
-                        <table>
-                            <tr>
-                                <td>1. Event Date: ${formattedEventDate}</td>
-                                <td>Start Time: ${formatTimeToAMPM(formData.get('start-time'))}</td>
-                                <td>End Time: ${formatTimeToAMPM(formData.get('end-time'))}</td>
-                            </tr>
-                            <tr>
-                                <td>2. Duration: 3 hours</td>
-                                <td>Location: ${facility}</td>
-                                <td>Party Room: TBC</td>
-                            </tr>
-                            <tr>
-                                <td>3. Package: ${formData.get('package')}</td>
-                                <td>Cost per person: ${formData.get('cost-per-person')} KES</td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td>4. Number of Persons: ${formData.get('attendees')}</td>
-                                <td></td>
-                                <td></td>
-                            </tr>
-                        </table>
-                        
-                        <p class="mt-4"><strong>Venue Rental Includes:</strong></p>
-                        <ol class="list-decimal pl-5">
-                            <li>Simple Balloon Deco & Paper plates & cups</li>
-                            <li>Party host and FNB Person</li>
-                            <li>Parking validation for 2 car & 1 gift voucher for birthday child</li>
-                            <li>Tables & chairs set up in Format to be communicated</li>
-                            <li>Kiddie meal for a pax of ${formData.get('attendees')}</li>
-                        </ol>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">2. Confirmation of Attendees</h2>
-                        <p>The final guaranteed number of attendees is due 3 business days before the event. The client is responsible for costs based on the final guarantee or actual number, whichever is greater. If the final count is less than 90% of the contracted count, the Client pays for the originally contracted count.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">3. Fees and Payments</h2>
-                        <p>A deposit equivalent to the payment for 10 pax based on the selected package is required to secure the space. No occupation without deposit payment. The balance is due on the day of the event before any services are rendered. Electronic payment confirmation to be sent to Venue via email.</p>
-                        
-                        <p class="mt-2"><strong>Payment Details</strong></p>
-                        <table>
-                            <tr>
-                                <th>GAMES MPESA PAYMENT</th>
-                                <th>BANK TRANSFER:</th>
-                            </tr>
-                            <tr>
-                                <td>Till Number ${tillNumber}</td>
-                                <td>Account Name: Hameco Limited</td>
-                            </tr>
-                            <tr>
-                                <td>(Hameco)</td>
-                                <td>Account Number: 1108771513</td>
-                            </tr>
-                            <tr>
-                                <td>FOOD & BEVERAGE PAYMENT</td>
-                                <td>Bank: Kenya Commercial Bank</td>
-                            </tr>
-                            <tr>
-                                <td>Till Number</td>
-                                <td>Branch Code: 01-180</td>
-                            </tr>
-                        </table>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">4. Cancellation Policy</h2>
-                        <p>Cancellations must be made 72 hours prior to the event in writing. No refund policy; funds may be applied to a similar future event at the VM's discretion. Venue can cancel if the Client is insolvent or under liquidation.</p>
-                    </div>
+            // Set default package and cost
+            packageSelect.value = "Facility Package";
+            document.getElementById('cost-per-person').value = hangoutPackages["Facility Package"];
+        } else {
+            packageSelect.style.display = 'block';
+            packageSelect.required = true;
+            document.getElementById('school-trip-options').style.display = 'none';
+            
+            // Add packages based on facility
+            if (facility && facilityPackages[facility]) {
+                facilityPackages[facility].forEach(pkg => {
+                    const option = document.createElement('option');
+                    option.value = pkg.name;
+                    option.textContent = pkg.name;
+                    option.dataset.cost = pkg.cost;
+                    packageSelect.appendChild(option);
+                });
                 
-                    <div>
-                        <h2 class="font-bold">5. Indemnification</h2>
-                        <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">6. Force Majeure</h2>
-                        <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">7. Entire Agreement</h2>
-                        <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">8. Terms & Conditions</h2>
-                        
-                        <h3 class="font-bold mt-2">a. Pre-Event</h3>
-                        <ul class="list-disc pl-5">
-                            <li><strong>Booking Confirmation:</strong> Bookings are confirmed upon receiving a deposit and a signed agreement. Payments are non-refundable.</li>
-                            <li><strong>Pre-Order Food & Beverages:</strong> Highly recommended to avoid delays.</li>
-                            <li><strong>Guest Count:</strong> Provide an accurate estimate, including adults, to ensure sufficient staff, supplies, and seating.</li>
-                            <li><strong>Dietary Needs:</strong> Communicate any dietary needs in advance for accommodation within the chosen package.</li>
-                            <li><strong>Decorations:</strong> Simple balloon decorations are included. External decorations must be pre-approved and set up/taken down by the decorator within the designated area.</li>
-                        </ul>
-                        
-                        <h3 class="font-bold mt-2">b. During Your Event</h3>
-                        <ul class="list-disc pl-5">
-                            <li><strong>Arrival Time:</strong> Arrive at least 15 minutes before your scheduled party slot. Late arrivals cannot extend their time.</li>
-                            <li><strong>Package Changes:</strong> Significant changes or additions to your party package during the event are not possible. Discuss potential changes beforehand.</li>
-                            <li><strong>Party Favors:</strong> Outside favors are welcome, but confetti, glitter, or items that stain furniture/carpet are prohibited.</li>
-                            <li><strong>Supervision:</strong> Adult supervision is required for all children.</li>
-                            <li><strong>Damage:</strong> Any damage to property must be paid for in full.</li>
-                            <li><strong>Food & Beverage:</strong> All arrangements must be made through approved vendors. Outside food and beverages are not permitted, except for birthday cakes or fruits.</li>
-                        </ul>
-                        
-                        <h3 class="font-bold mt-2">c. Post-Event</h3>
-                        <ul class="list-disc pl-5">
-                            <li><strong>Grace Period:</strong> A 20-minute grace period is allowed after your event. Exceeding this period will incur a surcharge of KES 5,000 per hour, except for the Immersive Room, which carries an additional surcharge of KES 10,000.</li>
-                            <li><strong>Cleanup:</strong> Venue Staff will handle cleanup. Collect personal belongings before departure. Lost and found items are held for two weeks.</li>
-                        </ul>
-                        
-                        <h3 class="font-bold mt-2">d. General Conduct:</h3>
-                        <ul class="list-disc pl-5">
-                            <li><strong>Behavior:</strong> Guests must conduct themselves respectfully to other guests and staff members.</li>
-                            <li><strong>Prohibited Activities:</strong> Drinking of alcoholic drinks within the Ozone Trampoline Park and Under The Sea party rooms, Smoking (including e-cigarettes), illegal substances, and dangerous activities are strictly prohibited, violations will result in immediate eviction from the facilities.</li>
-                            <li><strong>Socks:</strong> Socks must be worn in the playing area at Under the Sea and grips socks must be worn at Ozone Trampoline Park (available for KES 250 per pair).</li>
-                            <li><strong>Timings:</strong> Strict adherence to event timings with a 20-minute grace period.</li>
-                            <li><strong>Liability Form:</strong> First-time participants must sign the liability form. Any damage caused by the Client or guests is the Client's responsibility.</li>
-                        </ul>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">9. Governing Law</h2>
-                        <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
-                    </div>
-                    
-                    <div class="mt-8">
-                        <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
-                                <div class="mt-4">
-                                    <p>Authorized Signatory</p>
-                                    <p class="mt-6">Name:………………………………………</p>
-                                    <p>Designation:………………………………………</p>
-                                    <p>Signature:………………………………………</p>
-                                    <p>Date:………………………………………</p>
-                                    <p class="mt-4">Company Stamp:</p>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of Client</p>
-                                <div class="mt-4">
-                                    <p>Name: ${formData.get('client-name')}</p>
-                                    <p>Designation: ${facility}</p>
-                                    <div class="mt-2">
-                                        <p>Signature:</p>
-                                        <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
-                                    </div>
-                                    <p>Date: ${formattedCurrentDate}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            contractContent.innerHTML = contractHTML;
+                // Set default package and cost
+                if (facilityPackages[facility].length > 0) {
+                    packageSelect.value = facilityPackages[facility][0].name;
+                    document.getElementById('cost-per-person').value = facilityPackages[facility][0].cost;
+                }
+            }
         }
+    }
 
-        function generateEventsContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
-            // Get organization name
-            const organization = formData.get('organization') || formData.get('client-name');
+    // Update package selection visibility for school trips
+    function updateSchoolTripOptions() {
+        const eventType = document.getElementById('event-type').value;
+        const schoolTripOptions = document.getElementById('school-trip-options');
+        
+        if (eventType === 'school-trip') {
+            schoolTripOptions.style.display = 'block';
+            document.getElementById('package').style.display = 'none';
             
-            // Create events contract HTML
-            const contractHTML = `
-                <div class="space-y-4">
-                    <div class="text-center mb-6">
-                        <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION EVENTS AGREEMENT</h1>
-                        <p>This contract is entered into on this ${formattedCurrentDate} by and between</p>
-                        <p class="font-bold">Hameco Limited</p>
-                        <p>Registration No. C. 13452</p>
-                        <p>P. O. Box 200 – 00621, Village Market</p>
-                        <p>NAIROBI</p>
-                        <p>(hereinafter referred to as ‘’the Venue’’)</p>
-                        <p>And</p>
-                        <p class="font-bold">${organization}</p>
-                        <p>(hereinafter referred to as ‘’the Client''</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">1. Event Description:</h2>
-                        <p>The Client is hereby booking the Venue for a ${document.getElementById('event-type').options[document.getElementById('event-type').selectedIndex].text} space.</p>
-                        
-                        <p class="font-bold mt-2">Venue Rental:</p>
-                        <p>The Venue will be made available to the Client for the Event Date and times as set forth.</p>
-                        
-                        <p><strong>Event Date:</strong> ${formattedEventDate}</p>
-                        <p><strong>Start Time:</strong> ${formatTimeToAMPM(formData.get('start-time'))}</p>
-                        <p><strong>End Time:</strong> ${formatTimeToAMPM(formData.get('end-time'))}</p>
-                        <p><strong>Specific venue to be occupied:</strong> ${facility}</p>
-                        <p><strong>Number of persons:</strong> ${formData.get('attendees')}</p>
-                        <p><strong>Cost per person:</strong> ${formData.get('cost-per-person')} KES</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">2. Confirmation of Attendees</h2>
-                        <p>A final guaranteed number of attendees is due at least three (3) business days prior to the scheduled event date. In the event that a final guarantee is not provided, the contracted number of attendees will be used as the final guarantee. The Client is responsible for all guaranteed food and drinks costs per attendee multiplied by the final guarantee or the actual number of attendees, whichever is greater.</p>
-                        <p>Should the guaranteed numbers confirmed be less than 90% of the originally contracted count, the Client agrees to pay the originally contracted count, multiplied by the pricing provided by the Venue of the items consumed.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">3. Fees and Payments:</h2>
-                        <p>The client to secure space will pay a deposit of 50%, and the balance cleared at least 48 hours before the day of the event. It is specifically recorded that no client will be allowed to occupy the space without having made a deposit payment to the venue in the account and as directed herein below:</p>
-                        <p>Name of Account: Hameco Limited</p>
-                        <p>Account Number: 1108771513</p>
-                        <p>Name of Bank: Kenya Commercial Bank</p>
-                        <p>Branch Code: 01-180</p>
-                        <p>If an electronic payment is made, the Client should send the confirmation of payment to the Venue upon making the payment. Electronic transfers are only confirmed when proof of <strong>payment is received.</strong></p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">4. Cancellation of bookings</h2>
-                        <p>Any request to cancel a booking can only be made 48 hours prior to the event and this must be notified in writing to the venue. The venue has a no-refund policy. The venue will not at any time issue a refund. The venue shall push forward the funds paid to another similar event at the discretion of the venue.</p>
-                        <p>The Venue shall have the right to cancel this Agreement by written notice to the Client in the event that the Client is placed under provisional or final liquidation, judicial management or commits any acts of insolvency as defined in the Insolvency Act.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">5. Indemnification:</h2>
-                        <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">6. Force Majeure:</h2>
-                        <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">7. Entire Agreement:</h2>
-                        <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">8. Governing Law:</h2>
-                        <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
-                    </div>
-                    
-                    <div class="mt-8">
-                        <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
-                                <div class="mt-4">
-                                    <p>Authorized Signatory</p>
-                                    <p class="mt-6">Name:………………………………………</p>
-                                    <p>Designation:………………………………………</p>
-                                    <p>Signature:………………………………………</p>
-                                    <p>Date:………………………………………</p>
-                                    <p class="mt-4">Company Stamp:</p>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of ${organization}</p>
-                                <div class="mt-4">
-                                    <p>Authorized Signatory</p>
-                                    <p>Name: ${formData.get('client-name')}</p>
-                                    <p>Designation: ${formData.get('client-name')}</p>
-                                    <div class="mt-2">
-                                        <p>Signature:</p>
-                                        <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
-                                    </div>
-                                    <p>Date: ${formattedCurrentDate}</p>
-                                    <p class="mt-4">Company Stamp:</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            contractContent.innerHTML = contractHTML;
-        }
-
-        // Generate contract specifically for school trips
-        function generateSchoolTripContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
-            // Get organization name
-            const organization = formData.get('organization') || formData.get('client-name');
-            
-            // Gather selected school trip package items
-            const selected = Array.from(document.querySelectorAll('input[name="school-package"]:checked')).map(cb => cb.value);
-            const selectedLabels = selected.map(val => {
-                if (val === 'play') return 'Play';
-                if (val === 'eat') return 'Eat';
-                if (val === 'learn') return 'Learn';
-                if (val === 'drinks') return 'Drinks';
-                return val;
+            // Add event listeners to school trip checkboxes
+            const checkboxes = document.querySelectorAll('input[name="school-package"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateSchoolTripCost);
             });
+        } else {
+            schoolTripOptions.style.display = 'none';
+            document.getElementById('package').style.display = 'block';
+        }
+    }
 
-            const costPerPerson = document.getElementById('cost-per-person').value || 0;
+    // Calculate school trip cost based on selected options
+    function updateSchoolTripCost() {
+        const eventType = document.getElementById('event-type').value;
+        if (eventType !== 'school-trip') return;
+        
+        const facility = document.getElementById('facility').value;
+        const checkboxes = document.querySelectorAll('input[name="school-package"]:checked');
+        let totalCost = 0;
+        
+        checkboxes.forEach(checkbox => {
+            if (checkbox.value === 'play') {
+                totalCost += schoolTripCosts.play[facility] || 0;
+            } else if (checkbox.value === 'eat') {
+                totalCost += schoolTripCosts.eat;
+            } else if (checkbox.value === 'learn') {
+                totalCost += schoolTripCosts.learn;
+            } else if (checkbox.value === 'drinks') {
+                totalCost += schoolTripCosts.drinks || 0;
+            }
+        });
+        
+        document.getElementById('cost-per-person').value = totalCost;
+    }
 
-            const contractHTML = `
-                <div class="space-y-4">
-                    <div class="text-center mb-6">
-                        <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION EVENTS AGREEMENT</h1>
-                        <p>This contract is entered into on this ${formattedCurrentDate} by and between</p>
-                        <p class="font-bold">Hameco Limited</p>
-                        <p>Registration No. C. 13452</p>
-                        <p>P. O. Box 200 – 00621, Village Market</p>
-                        <p>NAIROBI</p>
-                        <p>(hereinafter referred to as ‘’the Venue''</p>
-                        <p>And</p>
-                        <p class="font-bold">${organization}</p>
-                        <p>(hereinafter referred to as ‘’the Client''</p>
-                    </div>
+    // Package selection change handler
+    document.getElementById('package').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption && selectedOption.dataset.cost) {
+            document.getElementById('cost-per-person').value = selectedOption.dataset.cost;
+        }
+    });
+
+    // Submit booking data to Google Sheets
+    function submitToGoogleSheets(formData) {
+        return new Promise((resolve, reject) => {
+            // Helper: convert to uppercase except emails
+            function toUpperExceptEmail(value, fieldName) {
+                if (!value) return 'N/A';
+                if (fieldName === 'Email Address') return value;
+                return value.toUpperCase();
+            }
+
+            // Get birthday persons data
+            const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value).filter(name => name.trim() !== '');
+            const birthdayDOBs = Array.from(document.querySelectorAll('input[name="birthday-dob[]"]')).map(input => input.value).filter(dob => dob.trim() !== '');
+            
+            const birthdayPersons = birthdayNames.map((name, index) => {
+                return `${name} (${birthdayDOBs[index] || 'N/A'})`;
+            }).join('; ');
+
+            // Prepare data for Google Sheets
+            const data = {
+                'Event Date': toUpperExceptEmail(formData.get('event-date'), 'Event Date'),
+                'Package': toUpperExceptEmail(
+                    formData.get('event-type') === 'school-trip' ? getSchoolTripPackageSelections() : formData.get('package'),
+                    'Package'
+                ),
+                'Facility': toUpperExceptEmail(formData.get('facility'), 'Facility'),
+                'Event Type': toUpperExceptEmail(formData.get('event-type'), 'Event Type'),
+                'Client Name': toUpperExceptEmail(formData.get('client-name'), 'Client Name'),
+                'Contact Number': toUpperExceptEmail(formData.get('contact'), 'Contact Number'),
+                'Email Address': toUpperExceptEmail(formData.get('email'), 'Email Address'),
+                'Organisation/Institution': toUpperExceptEmail(formData.get('organization'), 'Organisation/Institution'),
+                'Birthday Persons': toUpperExceptEmail(birthdayPersons, 'Birthday Persons'),
+                'Start Time': toUpperExceptEmail(formData.get('start-time'), 'Start Time'),
+                'Number of Persons (PAX)': toUpperExceptEmail(formData.get('attendees'), 'Number of Persons (PAX)'),
+                'Notes': toUpperExceptEmail(formData.get('notes'), 'Notes')
+            };
+
+            console.log('Submitting to Google Sheets:', data);
+
+            // Use no-cors mode for Google Sheets submission
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                // Assume success for no-cors mode
+                console.log('Google Sheets submission completed');
+                resolve(true);
+            })
+            .catch(error => {
+                console.error('Error submitting to Google Sheets:', error);
+                resolve(false);
+            });
+        });
+    }
+
+    // Helper function to get school trip package selections
+    function getSchoolTripPackageSelections() {
+        const eventType = document.getElementById('event-type').value;
+        if (eventType !== 'school-trip') return '';
+        
+        const selectedPackages = Array.from(document.querySelectorAll('input[name="school-package"]:checked'))
+            .map(checkbox => {
+                switch(checkbox.value) {
+                    case 'play': return 'Play';
+                    case 'eat': return 'Eat';
+                    case 'learn': return 'Learn';
+                    case 'drinks': return 'Drinks';
+                    default: return checkbox.value;
+                }
+            });
+        
+        return selectedPackages.join(', ') || 'None';
+    }
+
+    // CORRECTED function to upload to Google Drive
+    async function uploadToGoogleDrive(contractData, fileName, clientData) {
+        try {
+            console.log('Starting Google Drive upload...');
+            
+            // Create form data to avoid CORS preflight
+            const formData = new FormData();
+            formData.append('action', 'uploadContract');
+            formData.append('contractData', contractData);
+            formData.append('fileName', fileName);
+            formData.append('clientData', JSON.stringify(clientData));
+            
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: formData // Use FormData instead of JSON
+            });
+            
+            console.log('Upload response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.text();
+            console.log('Upload response text:', result);
+            
+            let jsonResult;
+            try {
+                jsonResult = JSON.parse(result);
+            } catch (e) {
+                throw new Error('Invalid JSON response from server');
+            }
+            
+            if (!jsonResult.success) {
+                throw new Error(jsonResult.error || jsonResult.message || 'Upload failed');
+            }
+            
+            return jsonResult;
+            
+        } catch (error) {
+            console.error('Upload to Google Drive failed:', error);
+            throw error;
+        }
+    }
+
+    // Show upload progress
+    function showUploadProgress() {
+        const button = document.getElementById('download-contract');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<span>Uploading to Drive...</span>';
+        button.disabled = true;
+        return () => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        };
+    }
+
+    // Update the submitBookingInquiry function
+    function submitBookingInquiry() {
+        // Validate form
+        const eventType = document.getElementById('event-type').value;
+        let isValid = true;
+        
+        // Get all required fields
+        const requiredFields = document.querySelectorAll('#booking-form [required]');
+        
+        requiredFields.forEach(field => {
+            // Skip validation for package field if it's a school trip
+            if (eventType === 'school-trip' && field.id === 'package') {
+                return;
+            }
+            
+            if (!field.value.trim()) {
+                isValid = false;
+                field.classList.add('border-red-500');
+            } else {
+                field.classList.remove('border-red-500');
+            }
+        });
+        
+        // Special validation for school trip - at least one package option must be selected
+        if (eventType === 'school-trip') {
+            const schoolPackageCheckboxes = document.querySelectorAll('input[name="school-package"]:checked');
+            if (schoolPackageCheckboxes.length === 0) {
+                isValid = false;
+                alert('Please select at least one school trip package option');
+                return;
+            }
+        }
+        
+        // Special validation for birthday - at least one birthday person must be specified
+        if (eventType === 'birthday') {
+            const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value.trim());
+            const hasBirthdayPerson = birthdayNames.some(name => name !== '');
+            if (!hasBirthdayPerson) {
+                isValid = false;
+                alert('Please provide at least one birthday person name');
+                return;
+            }
+        }
+        
+        // Validate signature
+        if (signaturePad.isEmpty()) {
+            isValid = false;
+            alert('Please provide your signature');
+            return;
+        }
+        
+        if (!isValid) {
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        // Get form data
+        const formData = new FormData(document.getElementById('booking-form'));
+
+        // Submit to Google Sheets first, then generate contract
+        submitToGoogleSheets(formData).then(success => {
+            if (success) {
+                // Generate contract
+                generateContract();
+
+                // Show contract container
+                document.getElementById('contract-container').style.display = 'block';
+
+                // Scroll to contract
+                document.getElementById('contract-container').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                // Submission failed; do not generate contract
+                console.warn('Google Sheets submission failed; contract generation aborted.');
+                alert('Failed to submit data. Please try again.');
+            }
+        });
+    }
+
+    function generateContract() {
+        const formData = new FormData(document.getElementById('booking-form'));
+        const contractContent = document.getElementById('contract-content');
+        const eventType = document.getElementById('event-type').value;
+        
+        // Format date for display
+        const eventDate = new Date(formData.get('event-date'));
+        const formattedEventDate = eventDate.toLocaleDateString('en-GB', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+        
+        const currentDate = new Date();
+        const formattedCurrentDate = currentDate.toLocaleDateString('en-GB', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+        
+        // Get facility for designation and till number
+        const facility = document.getElementById('facility').value;
+        const tillNumber = facilityTillNumbers[facility] || '';
+        
+        // Generate contract based on event type
+        if (eventType === 'birthday') {
+            generateBirthdayContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
+        } else if (eventType === 'school-trip') {
+            generateSchoolTripContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
+        } else {
+            generateEventsContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent);
+        }
+        
+        // Set up download button
+        document.getElementById('download-contract').onclick = function() {
+            downloadContract();
+        };
+    }
+
+    // Helper: convert 24-hour 'HH:MM' to 'h:mm AM/PM'
+    function formatTimeToAMPM(timeStr) {
+        if (!timeStr) return '';
+        // Accept formats like '10:00' or '14:30'
+        const parts = timeStr.split(':');
+        if (parts.length < 2) return timeStr;
+        let hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        const suffix = hours >= 12 ? 'PM' : 'AM';
+        hours = ((hours + 11) % 12) + 1; // convert 0->12
+        return hours + ':' + minutes + ' ' + suffix;
+    }
+
+    function generateBirthdayContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
+        // Get birthday persons data
+        const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value).filter(name => name.trim() !== '');
+        const birthdayDOBs = Array.from(document.querySelectorAll('input[name="birthday-dob[]"]')).map(input => input.value).filter(dob => dob.trim() !== '');
+        
+        const birthdayPersons = birthdayNames.map((name, index) => {
+            const dob = birthdayDOBs[index] ? new Date(birthdayDOBs[index]).toLocaleDateString('en-GB') : 'N/A';
+            return `${name} (DOB: ${dob})`;
+        }).join(', ');
+
+        // Create birthday contract HTML
+        const contractHTML = `
+            <div class="space-y-4">
+                <div class="text-center mb-6">
+                    <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION AGREEMENT</h1>
+                    <p>This agreement is entered into on this ${formattedCurrentDate}</p>
+                    <p>by and between Hameco Limited of P. O. Box 200 – 00621, Village Market, Nairobi Hereinafter
+                    referred to as "Venue" and ${formData.get('client-name')}, hereinafter referred to as "Client".</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">1. Event Description:</h2>
+                    <table>
+                        <tr>
+                            <td>1. Event Date: ${formattedEventDate}</td>
+                            <td>Start Time: ${formatTimeToAMPM(formData.get('start-time'))}</td>
+                            <td>End Time: ${formatTimeToAMPM(formData.get('end-time'))}</td>
+                        </tr>
+                        <tr>
+                            <td>2. Duration: 3 hours</td>
+                            <td>Location: ${facility}</td>
+                            <td>Party Room: TBC</td>
+                        </tr>
+                        <tr>
+                            <td>3. Package: ${formData.get('package')}</td>
+                            <td>Cost per person: ${formData.get('cost-per-person')} KES</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>4. Number of Persons: ${formData.get('attendees')}</td>
+                            <td>Birthday Person(s): ${birthdayPersons}</td>
+                            <td></td>
+                        </tr>
+                    </table>
                     
-                    <div>
-                        <h2 class="font-bold">1. Event Description:</h2>
-                        <p>The Client is hereby booking the Venue for a School Trip.</p>
-                        
-                        <p class="font-bold mt-2">Venue Rental:</p>
-                        <p>The Venue will be made available to the Client for the Event Date and times as set forth.</p>
-                        
-                        <p><strong>Event Date:</strong> ${formattedEventDate}</p>
-                        <p><strong>Start Time:</strong> ${formatTimeToAMPM(formData.get('start-time'))}</p>
-                        <p><strong>End Time:</strong> ${formatTimeToAMPM(formData.get('end-time'))}</p>
-                        <p><strong>Specific venue to be occupied:</strong> ${facility}</p>
-                        <p><strong>Package Options Selected:</strong> ${selectedLabels.join(', ') || 'None'}</p>
-                        <p><strong>Number of persons:</strong> ${formData.get('attendees')}</p>
-                        <p><strong>Cost per person:</strong> ${costPerPerson} KES</p>
-                    </div>
+                    <p class="mt-4"><strong>Venue Rental Includes:</strong></p>
+                    <ol class="list-decimal pl-5">
+                        <li>Simple Balloon Deco & Paper plates & cups</li>
+                        <li>Party host and FNB Person</li>
+                        <li>Parking validation for 2 car & 1 gift voucher for birthday child</li>
+                        <li>Tables & chairs set up in Format to be communicated</li>
+                        <li>Kiddie meal for a pax of ${formData.get('attendees')}</li>
+                    </ol>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">2. Confirmation of Attendees</h2>
+                    <p>The final guaranteed number of attendees is due 3 business days before the event. The client is responsible for costs based on the final guarantee or actual number, whichever is greater. If the final count is less than 90% of the contracted count, the Client pays for the originally contracted count.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">3. Fees and Payments</h2>
+                    <p>A deposit equivalent to the payment for 10 pax based on the selected package is required to secure the space. No occupation without deposit payment. The balance is due on the day of the event before any services are rendered. Electronic payment confirmation to be sent to Venue via email.</p>
                     
-                    <div>
-                        <h2 class="font-bold">2. Confirmation of Attendees</h2>
-                        <p>A final guaranteed number of attendees is due at least three (3) business days prior to the scheduled event date. In the event that a final guarantee is not provided, the contracted number of attendees will be used as the final guarantee. The Client is responsible for all guaranteed food and drinks costs per attendee multiplied by the final guarantee or the actual number of attendees, whichever is greater.</p>
-                        <p>Should the guaranteed numbers confirmed be less than 90% of the originally contracted count, the Client agrees to pay the originally contracted count, multiplied by the pricing provided by the Venue of the items consumed.</p>
-                    </div>
+                    <p class="mt-2"><strong>Payment Details</strong></p>
+                    <table>
+                        <tr>
+                            <th>GAMES MPESA PAYMENT</th>
+                            <th>BANK TRANSFER:</th>
+                        </tr>
+                        <tr>
+                            <td>Till Number ${tillNumber}</td>
+                            <td>Account Name: Hameco Limited</td>
+                        </tr>
+                        <tr>
+                            <td>(Hameco)</td>
+                            <td>Account Number: 1108771513</td>
+                        </tr>
+                        <tr>
+                            <td>FOOD & BEVERAGE PAYMENT</td>
+                            <td>Bank: Kenya Commercial Bank</td>
+                        </tr>
+                        <tr>
+                            <td>Till Number</td>
+                            <td>Branch Code: 01-180</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">4. Cancellation Policy</h2>
+                    <p>Cancellations must be made 72 hours prior to the event in writing. No refund policy; funds may be applied to a similar future event at the VM's discretion. Venue can cancel if the Client is insolvent or under liquidation.</p>
+                </div>
+            
+                <div>
+                    <h2 class="font-bold">5. Indemnification</h2>
+                    <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">6. Force Majeure</h2>
+                    <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">7. Entire Agreement</h2>
+                    <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">8. Terms & Conditions</h2>
                     
-                    <div>
-                        <h2 class="font-bold">3. Fees and Payments:</h2>
-                        <p>The client to secure space will pay a deposit of 50%, and the balance cleared at least 48 hours before the day of the event. It is specifically recorded that no client will be allowed to occupy the space without having made a deposit payment to the venue in the account and as directed herein below:</p>
-                        <p>Name of Account: Hameco Limited</p>
-                        <p>Account Number: 1108771513</p>
-                        <p>Name of Bank: Kenya Commercial Bank</p>
-                        <p>Branch Code: 01-180</p>
-                        <p>If an electronic payment is made, the Client should send the confirmation of payment to the Venue upon making the payment. Electronic transfers are only confirmed when proof of <strong>payment is received.</strong></p>
-                    </div>
+                    <h3 class="font-bold mt-2">a. Pre-Event</h3>
+                    <ul class="list-disc pl-5">
+                        <li><strong>Booking Confirmation:</strong> Bookings are confirmed upon receiving a deposit and a signed agreement. Payments are non-refundable.</li>
+                        <li><strong>Pre-Order Food & Beverages:</strong> Highly recommended to avoid delays.</li>
+                        <li><strong>Guest Count:</strong> Provide an accurate estimate, including adults, to ensure sufficient staff, supplies, and seating.</li>
+                        <li><strong>Dietary Needs:</strong> Communicate any dietary needs in advance for accommodation within the chosen package.</li>
+                        <li><strong>Decorations:</strong> Simple balloon decorations are included. External decorations must be pre-approved and set up/taken down by the decorator within the designated area.</li>
+                    </ul>
                     
-                    <div>
-                        <h2 class="font-bold">4. Cancellation of bookings</h2>
-                        <p>Any request to cancel a booking can only be made 48 hours prior to the event and this must be notified in writing to the venue. The venue has a no-refund policy. The venue will not at any time issue a refund. The venue shall push forward the funds paid to another similar event at the discretion of the venue.</p>
-                        <p>The Venue shall have the right to cancel this Agreement by written notice to the Client in the event that the Client is placed under provisional or final liquidation, judicial management or commits any acts of insolvency as defined in the Insolvency Act.</p>
-                    </div>
+                    <h3 class="font-bold mt-2">b. During Your Event</h3>
+                    <ul class="list-disc pl-5">
+                        <li><strong>Arrival Time:</strong> Arrive at least 15 minutes before your scheduled party slot. Late arrivals cannot extend their time.</li>
+                        <li><strong>Package Changes:</strong> Significant changes or additions to your party package during the event are not possible. Discuss potential changes beforehand.</li>
+                        <li><strong>Party Favors:</strong> Outside favors are welcome, but confetti, glitter, or items that stain furniture/carpet are prohibited.</li>
+                        <li><strong>Supervision:</strong> Adult supervision is required for all children.</li>
+                        <li><strong>Damage:</strong> Any damage to property must be paid for in full.</li>
+                        <li><strong>Food & Beverage:</strong> All arrangements must be made through approved vendors. Outside food and beverages are not permitted, except for birthday cakes or fruits.</li>
+                    </ul>
                     
-                    <div>
-                        <h2 class="font-bold">5. Indemnification:</h2>
-                        <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
-                    </div>
+                    <h3 class="font-bold mt-2">c. Post-Event</h3>
+                    <ul class="list-disc pl-5">
+                        <li><strong>Grace Period:</strong> A 20-minute grace period is allowed after your event. Exceeding this period will incur a surcharge of KES 5,000 per hour, except for the Immersive Room, which carries an additional surcharge of KES 10,000.</li>
+                        <li><strong>Cleanup:</strong> Venue Staff will handle cleanup. Collect personal belongings before departure. Lost and found items are held for two weeks.</li>
+                    </ul>
                     
-                    <div>
-                        <h2 class="font-bold">6. Force Majeure:</h2>
-                        <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
-                    </div>
+                    <h3 class="font-bold mt-2">d. General Conduct:</h3>
+                    <ul class="list-disc pl-5">
+                        <li><strong>Behavior:</strong> Guests must conduct themselves respectfully to other guests and staff members.</li>
+                        <li><strong>Prohibited Activities:</strong> Drinking of alcoholic drinks within the Ozone Trampoline Park and Under The Sea party rooms, Smoking (including e-cigarettes), illegal substances, and dangerous activities are strictly prohibited, violations will result in immediate eviction from the facilities.</li>
+                        <li><strong>Socks:</strong> Socks must be worn in the playing area at Under the Sea and grips socks must be worn at Ozone Trampoline Park (available for KES 250 per pair).</li>
+                        <li><strong>Timings:</strong> Strict adherence to event timings with a 20-minute grace period.</li>
+                        <li><strong>Liability Form:</strong> First-time participants must sign the liability form. Any damage caused by the Client or guests is the Client's responsibility.</li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">9. Governing Law</h2>
+                    <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
+                </div>
+                
+                <div class="mt-8">
+                    <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
                     
-                    <div>
-                        <h2 class="font-bold">7. Entire Agreement:</h2>
-                        <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
-                    </div>
-                    
-                    <div>
-                        <h2 class="font-bold">8. Governing Law:</h2>
-                        <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
-                    </div>
-                    
-                    <div class="mt-8">
-                        <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
-                                <div class="mt-4">
-                                    <p>Authorized Signatory</p>
-                                    <p class="mt-6">Name:………………………………………</p>
-                                    <p>Designation:………………………………………</p>
-                                    <p>Signature:………………………………………</p>
-                                    <p>Date:………………………………………</p>
-                                    <p class="mt-4">Company Stamp:</p>
-                                </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
+                            <div class="mt-4">
+                                <p>Authorized Signatory</p>
+                                <p class="mt-6">Name:………………………………………</p>
+                                <p>Designation:………………………………………</p>
+                                <p>Signature:………………………………………</p>
+                                <p>Date:………………………………………</p>
+                                <p class="mt-4">Company Stamp:</p>
                             </div>
-                            
-                            <div>
-                                <p class="font-bold">Signed and Stamped on behalf of ${organization}</p>
-                                <div class="mt-4">
-                                    <p>Authorized Signatory</p>
-                                    <p>Name: ${formData.get('client-name')}</p>
-                                    <p>Designation: ${facility}</p>
-                                    <div class="mt-2">
-                                        <p>Signature:</p>
-                                        <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
-                                    </div>
-                                    <p>Date: ${formattedCurrentDate}</p>
-                                    <p class="mt-4">Company Stamp:</p>
+                        </div>
+                        
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of Client</p>
+                            <div class="mt-4">
+                                <p>Name: ${formData.get('client-name')}</p>
+                                <p>Designation: ${facility}</p>
+                                <div class="mt-2">
+                                    <p>Signature:</p>
+                                    <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
                                 </div>
+                                <p>Date: ${formattedCurrentDate}</p>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-            
-            contractContent.innerHTML = contractHTML;
-        }
+            </div>
+        `;
+        
+        contractContent.innerHTML = contractHTML;
+    }
 
-        function downloadContract() {
+    function generateEventsContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
+        // Get organization name
+        const organization = formData.get('organization') || formData.get('client-name');
+        
+        // Create events contract HTML
+        const contractHTML = `
+            <div class="space-y-4">
+                <div class="text-center mb-6">
+                    <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION EVENTS AGREEMENT</h1>
+                    <p>This contract is entered into on this ${formattedCurrentDate} by and between</p>
+                    <p class="font-bold">Hameco Limited</p>
+                    <p>Registration No. C. 13452</p>
+                    <p>P. O. Box 200 – 00621, Village Market</p>
+                    <p>NAIROBI</p>
+                    <p>(hereinafter referred to as ‘’the Venue’’)</p>
+                    <p>And</p>
+                    <p class="font-bold">${organization}</p>
+                    <p>(hereinafter referred to as ‘’the Client''</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">1. Event Description:</h2>
+                    <p>The Client is hereby booking the Venue for a ${document.getElementById('event-type').options[document.getElementById('event-type').selectedIndex].text} space.</p>
+                    
+                    <p class="font-bold mt-2">Venue Rental:</p>
+                    <p>The Venue will be made available to the Client for the Event Date and times as set forth.</p>
+                    
+                    <p><strong>Event Date:</strong> ${formattedEventDate}</p>
+                    <p><strong>Start Time:</strong> ${formatTimeToAMPM(formData.get('start-time'))}</p>
+                    <p><strong>End Time:</strong> ${formatTimeToAMPM(formData.get('end-time'))}</p>
+                    <p><strong>Specific venue to be occupied:</strong> ${facility}</p>
+                    <p><strong>Number of persons:</strong> ${formData.get('attendees')}</p>
+                    <p><strong>Cost per person:</strong> ${formData.get('cost-per-person')} KES</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">2. Confirmation of Attendees</h2>
+                    <p>A final guaranteed number of attendees is due at least three (3) business days prior to the scheduled event date. In the event that a final guarantee is not provided, the contracted number of attendees will be used as the final guarantee. The Client is responsible for all guaranteed food and drinks costs per attendee multiplied by the final guarantee or the actual number of attendees, whichever is greater.</p>
+                    <p>Should the guaranteed numbers confirmed be less than 90% of the originally contracted count, the Client agrees to pay the originally contracted count, multiplied by the pricing provided by the Venue of the items consumed.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">3. Fees and Payments:</h2>
+                    <p>The client to secure space will pay a deposit of 50%, and the balance cleared at least 48 hours before the day of the event. It is specifically recorded that no client will be allowed to occupy the space without having made a deposit payment to the venue in the account and as directed herein below:</p>
+                    <p>Name of Account: Hameco Limited</p>
+                    <p>Account Number: 1108771513</p>
+                    <p>Name of Bank: Kenya Commercial Bank</p>
+                    <p>Branch Code: 01-180</p>
+                    <p>If an electronic payment is made, the Client should send the confirmation of payment to the Venue upon making the payment. Electronic transfers are only confirmed when proof of <strong>payment is received.</strong></p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">4. Cancellation of bookings</h2>
+                    <p>Any request to cancel a booking can only be made 48 hours prior to the event and this must be notified in writing to the venue. The venue has a no-refund policy. The venue will not at any time issue a refund. The venue shall push forward the funds paid to another similar event at the discretion of the venue.</p>
+                    <p>The Venue shall have the right to cancel this Agreement by written notice to the Client in the event that the Client is placed under provisional or final liquidation, judicial management or commits any acts of insolvency as defined in the Insolvency Act.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">5. Indemnification:</h2>
+                    <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">6. Force Majeure:</h2>
+                    <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">7. Entire Agreement:</h2>
+                    <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">8. Governing Law:</h2>
+                    <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
+                </div>
+                
+                <div class="mt-8">
+                    <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
+                            <div class="mt-4">
+                                <p>Authorized Signatory</p>
+                                <p class="mt-6">Name:………………………………………</p>
+                                <p>Designation:………………………………………</p>
+                                <p>Signature:………………………………………</p>
+                                <p>Date:………………………………………</p>
+                                <p class="mt-4">Company Stamp:</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of ${organization}</p>
+                            <div class="mt-4">
+                                <p>Authorized Signatory</p>
+                                <p>Name: ${formData.get('client-name')}</p>
+                                <p>Designation: ${formData.get('client-name')}</p>
+                                <div class="mt-2">
+                                    <p>Signature:</p>
+                                    <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
+                                </div>
+                                <p>Date: ${formattedCurrentDate}</p>
+                                <p class="mt-4">Company Stamp:</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        contractContent.innerHTML = contractHTML;
+    }
+
+    // Generate contract specifically for school trips
+    function generateSchoolTripContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
+        // Get organization name
+        const organization = formData.get('organization') || formData.get('client-name');
+        
+        // Gather selected school trip package items
+        const selected = Array.from(document.querySelectorAll('input[name="school-package"]:checked')).map(cb => cb.value);
+        const selectedLabels = selected.map(val => {
+            if (val === 'play') return 'Play';
+            if (val === 'eat') return 'Eat';
+            if (val === 'learn') return 'Learn';
+            if (val === 'drinks') return 'Drinks';
+            return val;
+        });
+
+        const costPerPerson = document.getElementById('cost-per-person').value || 0;
+
+        const contractHTML = `
+            <div class="space-y-4">
+                <div class="text-center mb-6">
+                    <h1 class="text-xl font-bold">VILLAGE MARKET RECREATION EVENTS AGREEMENT</h1>
+                    <p>This contract is entered into on this ${formattedCurrentDate} by and between</p>
+                    <p class="font-bold">Hameco Limited</p>
+                    <p>Registration No. C. 13452</p>
+                    <p>P. O. Box 200 – 00621, Village Market</p>
+                    <p>NAIROBI</p>
+                    <p>(hereinafter referred to as ‘’the Venue''</p>
+                    <p>And</p>
+                    <p class="font-bold">${organization}</p>
+                    <p>(hereinafter referred to as ‘’the Client''</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">1. Event Description:</h2>
+                    <p>The Client is hereby booking the Venue for a School Trip.</p>
+                    
+                    <p class="font-bold mt-2">Venue Rental:</p>
+                    <p>The Venue will be made available to the Client for the Event Date and times as set forth.</p>
+                    
+                    <p><strong>Event Date:</strong> ${formattedEventDate}</p>
+                    <p><strong>Start Time:</strong> ${formatTimeToAMPM(formData.get('start-time'))}</p>
+                    <p><strong>End Time:</strong> ${formatTimeToAMPM(formData.get('end-time'))}</p>
+                    <p><strong>Specific venue to be occupied:</strong> ${facility}</p>
+                    <p><strong>Package Options Selected:</strong> ${selectedLabels.join(', ') || 'None'}</p>
+                    <p><strong>Number of persons:</strong> ${formData.get('attendees')}</p>
+                    <p><strong>Cost per person:</strong> ${costPerPerson} KES</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">2. Confirmation of Attendees</h2>
+                    <p>A final guaranteed number of attendees is due at least three (3) business days prior to the scheduled event date. In the event that a final guarantee is not provided, the contracted number of attendees will be used as the final guarantee. The Client is responsible for all guaranteed food and drinks costs per attendee multiplied by the final guarantee or the actual number of attendees, whichever is greater.</p>
+                    <p>Should the guaranteed numbers confirmed be less than 90% of the originally contracted count, the Client agrees to pay the originally contracted count, multiplied by the pricing provided by the Venue of the items consumed.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">3. Fees and Payments:</h2>
+                    <p>The client to secure space will pay a deposit of 50%, and the balance cleared at least 48 hours before the day of the event. It is specifically recorded that no client will be allowed to occupy the space without having made a deposit payment to the venue in the account and as directed herein below:</p>
+                    <p>Name of Account: Hameco Limited</p>
+                    <p>Account Number: 1108771513</p>
+                    <p>Name of Bank: Kenya Commercial Bank</p>
+                    <p>Branch Code: 01-180</p>
+                    <p>If an electronic payment is made, the Client should send the confirmation of payment to the Venue upon making the payment. Electronic transfers are only confirmed when proof of <strong>payment is received.</strong></p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">4. Cancellation of bookings</h2>
+                    <p>Any request to cancel a booking can only be made 48 hours prior to the event and this must be notified in writing to the venue. The venue has a no-refund policy. The venue will not at any time issue a refund. The venue shall push forward the funds paid to another similar event at the discretion of the venue.</p>
+                    <p>The Venue shall have the right to cancel this Agreement by written notice to the Client in the event that the Client is placed under provisional or final liquidation, judicial management or commits any acts of insolvency as defined in the Insolvency Act.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">5. Indemnification:</h2>
+                    <p>The Client agrees to indemnify, defend and hold harmless the Venue, its employees, agents and contractors, from and against any and all claims, damages, losses, liabilities, suits, actions, demands, proceedings (whether legal or administrative), and expenses (including, but not limited to, reasonable attorneys' fees) arising out of or in connection this Agreement.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">6. Force Majeure:</h2>
+                    <p>Neither party shall be liable for any failure to perform its obligations under this Agreement where such failure results from any cause beyond its reasonable control, including but not limited to, any act of God, war, terrorism, fire, flood, earthquake, strike, riot, or other natural disaster.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">7. Entire Agreement:</h2>
+                    <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior and contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, of the parties.</p>
+                </div>
+                
+                <div>
+                    <h2 class="font-bold">8. Governing Law:</h2>
+                    <p>This Agreement shall be governed by and construed in accordance with the laws of Kenya.</p>
+                </div>
+                
+                <div class="mt-8">
+                    <p class="font-bold">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of HAMECO LIMITED</p>
+                            <div class="mt-4">
+                                <p>Authorized Signatory</p>
+                                <p class="mt-6">Name:………………………………………</p>
+                                <p>Designation:………………………………………</p>
+                                <p>Signature:………………………………………</p>
+                                <p>Date:………………………………………</p>
+                                <p class="mt-4">Company Stamp:</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <p class="font-bold">Signed and Stamped on behalf of ${organization}</p>
+                            <div class="mt-4">
+                                <p>Authorized Signatory</p>
+                                <p>Name: ${formData.get('client-name')}</p>
+                                <p>Designation: ${facility}</p>
+                                <div class="mt-2">
+                                    <p>Signature:</p>
+                                    <img src="${signaturePad.toDataURL()}" alt="Signature" class="signature-image">
+                                </div>
+                                <p>Date: ${formattedCurrentDate}</p>
+                                <p class="mt-4">Company Stamp:</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        contractContent.innerHTML = contractHTML;
+    }
+
+    // Updated download function with Google Drive upload
+    async function downloadContract() {
+        const resetButton = showUploadProgress();
+        
+        try {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             const contractElement = document.getElementById('contract-content');
             
+            // Get form data for metadata
+            const formData = new FormData(document.getElementById('booking-form'));
+            const clientData = {
+                name: formData.get('client-name'),
+                eventType: formData.get('event-type'),
+                eventDate: formData.get('event-date'),
+                facility: formData.get('facility'),
+                contact: formData.get('contact'),
+                email: formData.get('email'),
+                attendees: formData.get('attendees')
+            };
+            
             // Capture the contract as an image
-            html2canvas(contractElement, {
+            const canvas = await html2canvas(contractElement, {
                 scale: 2,
                 useCORS: true,
                 logging: false
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 210; // A4 width in mm
-                const pageHeight = 295; // A4 height in mm
-                const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight;
-                
-                let position = 0;
-                
-                // Add first page
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210;
+            const pageHeight = 295;
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            
+            let position = 0;
+            
+            // Add first page
+            doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            
+            // Add additional pages if needed
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                doc.addPage();
                 doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
+            }
+            
+            // Generate PDF and trigger upload
+            const pdfBlob = doc.output('blob');
+            const fileName = `Village-Market-Contract-${clientData.name}-${new Date().toISOString().split('T')[0]}.pdf`;
+            
+            // Convert blob to base64 for upload
+            const reader = new FileReader();
+            reader.onload = async function() {
+                const contractData = reader.result;
                 
-                // Add additional pages if needed
-                while (heightLeft >= 0) {
-                    position = heightLeft - imgHeight;
-                    doc.addPage();
-                    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
+                try {
+                    // Upload to Google Drive
+                    await uploadToGoogleDrive(contractData, fileName, clientData);
+                    
+                    // Download to user's device
+                    doc.save(fileName);
+                    alert('Contract downloaded and saved to Drive successfully!');
+                    
+                } catch (error) {
+                    console.error('Upload failed, downloading locally only:', error);
+                    // Fallback: download even if upload fails
+                    doc.save(fileName);
+                    alert('Contract downloaded locally. Drive upload failed: ' + error.message);
                 }
-                
-                // Save the PDF
-                doc.save('Village-Market-Recreation-Agreement.pdf');
-            });
+            };
+            reader.readAsDataURL(pdfBlob);
+            
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Error generating contract. Please try again.');
+        } finally {
+            resetButton();
         }
-    </script>
+    }
+</script>
 </body>
 </html>
