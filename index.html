@@ -45,7 +45,7 @@
         .contract-preview {
             font-family: 'Times New Roman', serif;
             line-height: 1.4;
-            font-size: 12pt; /* Requested: Times New Roman, 12 */
+            font-size: 12pt;
         }
         .contract-preview h1, .contract-preview h2, .contract-preview h3 {
             font-weight: bold;
@@ -93,13 +93,34 @@
         .organization-field {
             display: none;
         }
-        /* Signature image in contract: remove margin and ensure white background */
+        .birthday-field {
+            display: none;
+        }
         .contract-preview .signature-image {
             margin: 0 !important;
             border: none !important;
             background: #ffffff !important;
             display: block;
             max-height: 64px;
+        }
+        .birthday-person {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: #f9fafb;
+        }
+        .remove-birthday-person {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .remove-birthday-person:hover {
+            background: #dc2626;
         }
     </style>
 </head>
@@ -147,6 +168,27 @@
                 <div id="organization-field" class="organization-field">
                     <label for="organization" class="block text-sm font-bold text-gray-700">Organisation/Institution <span class="text-red-500">*</span></label>
                     <input type="text" id="organization" name="organization" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                </div>
+                
+                <!-- Birthday Person Field -->
+                <div id="birthday-field" class="birthday-field">
+                    <label class="block text-sm font-bold text-gray-700">Birthday Person(s) <span class="text-red-500">*</span></label>
+                    <p class="text-sm text-gray-500 mb-3">Add the name and date of birth for each birthday person</p>
+                    <div id="birthday-persons-container">
+                        <div class="birthday-person">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                                    <input type="text" name="birthday-name[]" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Date of Birth <span class="text-red-500">*</span></label>
+                                    <input type="text" name="birthday-dob[]" required class="birthday-dob mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="add-birthday-person" class="mt-2 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm">Add Another Birthday Person</button>
                 </div>
                 
                 <!-- Event Type -->
@@ -294,8 +336,10 @@
     </div>
 
     <script>
+        // Google Apps Script URL
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpo1fk6lQpcNPm-_1FCfpli5b8MjVF_e_Se_BseuBq7kiQAe5fCGIRaAlYOAR_v3lH/exec;
+
         // Initialize date picker
-        // Initialize date picker with a helper that can restrict weekends for school trips
         function setDatePickerForEventType(eventType) {
             const dateInput = document.getElementById('event-date');
             if (!dateInput) return;
@@ -360,10 +404,54 @@
             if (signaturePad.isEmpty()) {
                 alert("Please provide a signature first.");
             } else {
-                const dataURL = signaturePad.toDataURL(); // PNG Base64 image
-                console.log(dataURL); // You can upload or attach this to a form
+                const dataURL = signaturePad.toDataURL();
+                console.log(dataURL);
                 alert("Signature captured!");
             }
+        });
+
+        // Add birthday person functionality
+        document.getElementById('add-birthday-person').addEventListener('click', function() {
+            const container = document.getElementById('birthday-persons-container');
+            const newPerson = document.createElement('div');
+            newPerson.className = 'birthday-person';
+            newPerson.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="birthday-name[]" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Date of Birth <span class="text-red-500">*</span></label>
+                        <input type="text" name="birthday-dob[]" required class="birthday-dob mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    </div>
+                </div>
+                <button type="button" class="remove-birthday-person mt-2 bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded-md text-xs">Remove</button>
+            `;
+            container.appendChild(newPerson);
+            
+            // Initialize date picker for new DOB field
+            flatpickr(newPerson.querySelector('.birthday-dob'), {
+                dateFormat: "Y-m-d",
+                maxDate: "today"
+            });
+            
+            // Add remove functionality
+            newPerson.querySelector('.remove-birthday-person').addEventListener('click', function() {
+                if (document.querySelectorAll('.birthday-person').length > 1) {
+                    container.removeChild(newPerson);
+                } else {
+                    alert('At least one birthday person is required.');
+                }
+            });
+        });
+
+        // Initialize DOB date pickers for existing fields
+        document.querySelectorAll('.birthday-dob').forEach(input => {
+            flatpickr(input, {
+                dateFormat: "Y-m-d",
+                maxDate: "today"
+            });
         });
 
         // Facility to Till Number mapping
@@ -433,6 +521,7 @@
         // Event listeners for form logic
         document.getElementById('event-type').addEventListener('change', function() {
             updateOrganizationField();
+            updateBirthdayField();
             updateTimeSlotOptions();
             updatePackageOptions();
             updateSchoolTripOptions();
@@ -463,6 +552,24 @@
                 organizationField.style.display = 'none';
                 organizationInput.required = false;
                 organizationInput.value = '';
+            }
+        }
+
+        // Update birthday field based on event type
+        function updateBirthdayField() {
+            const eventType = document.getElementById('event-type').value;
+            const birthdayField = document.getElementById('birthday-field');
+            
+            if (eventType === 'birthday') {
+                birthdayField.style.display = 'block';
+                // Make birthday fields required
+                document.querySelectorAll('input[name="birthday-name[]"]').forEach(input => input.required = true);
+                document.querySelectorAll('input[name="birthday-dob[]"]').forEach(input => input.required = true);
+            } else {
+                birthdayField.style.display = 'none';
+                // Remove required attribute
+                document.querySelectorAll('input[name="birthday-name[]"]').forEach(input => input.required = false);
+                document.querySelectorAll('input[name="birthday-dob[]"]').forEach(input => input.required = false);
             }
         }
 
@@ -674,57 +781,64 @@
             }
         });
 
-        // Submit booking data to Google Sheets (working user-provided implementation)
+        // Submit booking data to Google Sheets
         function submitToGoogleSheets(formData) {
-    return new Promise((resolve, reject) => {
+            return new Promise((resolve, reject) => {
+                // Helper: convert to uppercase except emails
+                function toUpperExceptEmail(value, fieldName) {
+                    if (!value) return 'N/A';
+                    if (fieldName === 'Email Address') return value;
+                    return value.toUpperCase();
+                }
 
-        // Helper: convert to uppercase except emails
-        function toUpperExceptEmail(value, fieldName) {
-            if (!value) return 'N/A';
-            if (fieldName === 'Email Address') return value;
-            return value.toUpperCase();
+                // Get birthday persons data
+                const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value).filter(name => name.trim() !== '');
+                const birthdayDOBs = Array.from(document.querySelectorAll('input[name="birthday-dob[]"]')).map(input => input.value).filter(dob => dob.trim() !== '');
+                
+                const birthdayPersons = birthdayNames.map((name, index) => {
+                    return `${name} (${birthdayDOBs[index] || 'N/A'})`;
+                }).join('; ');
+
+                // Prepare data for Google Sheets
+                const data = {
+                    'Event Date': toUpperExceptEmail(formData.get('event-date'), 'Event Date'),
+                    'Package': toUpperExceptEmail(
+                        formData.get('event-type') === 'school-trip' ? getSchoolTripPackageSelections() : formData.get('package'),
+                        'Package'
+                    ),
+                    'Facility': toUpperExceptEmail(formData.get('facility'), 'Facility'),
+                    'Event Type': toUpperExceptEmail(formData.get('event-type'), 'Event Type'),
+                    'Client Name': toUpperExceptEmail(formData.get('client-name'), 'Client Name'),
+                    'Contact Number': toUpperExceptEmail(formData.get('contact'), 'Contact Number'),
+                    'Email Address': toUpperExceptEmail(formData.get('email'), 'Email Address'),
+                    'Organisation/Institution': toUpperExceptEmail(formData.get('organization'), 'Organisation/Institution'),
+                    'Birthday Persons': toUpperExceptEmail(birthdayPersons, 'Birthday Persons'),
+                    'Start Time': toUpperExceptEmail(formData.get('start-time'), 'Start Time'),
+                    'Number of Persons (PAX)': toUpperExceptEmail(formData.get('attendees'), 'Number of Persons (PAX)'),
+                    'Notes': toUpperExceptEmail(formData.get('notes'), 'Notes')
+                };
+
+                console.log('Submitting to Google Sheets:', data);
+
+                fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    // Assume success for no-cors mode
+                    console.log('Google Sheets submission completed');
+                    resolve(true);
+                })
+                .catch(error => {
+                    console.error('Error submitting to Google Sheets:', error);
+                    resolve(false);
+                });
+            });
         }
-
-        // Prepare data for Google Sheets
-        const data = {
-            'Timestamp': new Date().toLocaleString(),
-            'Event Date': toUpperExceptEmail(formData.get('event-date'), 'Event Date'),
-            'Package': toUpperExceptEmail(
-                formData.get('event-type') === 'school-trip' ? getSchoolTripPackageSelections() : formData.get('package'),
-                'Package'
-            ),
-            'Facility': toUpperExceptEmail(formData.get('facility'), 'Facility'),
-            'Event Type': toUpperExceptEmail(formData.get('event-type'), 'Event Type'),
-            'Client Name': toUpperExceptEmail(formData.get('client-name'), 'Client Name'),
-            'Contact Number': toUpperExceptEmail(formData.get('contact'), 'Contact Number'),
-            'Email Address': toUpperExceptEmail(formData.get('email'), 'Email Address'),
-            'Organisation/Institution': toUpperExceptEmail(formData.get('organization'), 'Organisation/Institution'),
-            'Start Time': toUpperExceptEmail(formData.get('start-time'), 'Start Time'),
-            'Number of Persons (PAX)': toUpperExceptEmail(`${formData.get('attendees')}`, 'Number of Persons (PAX)'),
-            'Notes': toUpperExceptEmail(formData.get('notes'), 'Notes')
-        };
-
-        // Replace with your Google Apps Script URL
-        const googleSheetsURL = 'https://script.google.com/macros/s/AKfycbzijuMOnn7gMDnZYZOFTEpm3Bs7wsoHQoobflRlmdlShEVPWIwGdvpOI5PH7bWwkCkG/exec';
-
-        fetch(googleSheetsURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => {
-            // Assume success for no-cors mode
-            resolve(true);
-        })
-        .catch(error => {
-            console.error('Error submitting to Google Sheets:', error);
-            resolve(false);
-        });
-    });
-}
 
         // Helper function to get school trip package selections
         function getSchoolTripPackageSelections() {
@@ -744,6 +858,104 @@
             
             return selectedPackages.join(', ') || 'None';
         }
+
+        // Improved function to upload to Google Drive
+        async function uploadToGoogleDrive(contractData, fileName, clientData) {
+            try {
+                console.log('Starting Google Drive upload...');
+                console.log('File name:', fileName);
+                console.log('Client data:', clientData);
+                
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'uploadContract',
+                        contractData: contractData,
+                        fileName: fileName,
+                        clientData: clientData
+                    })
+                });
+                
+                console.log('Upload response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('Upload response:', result);
+                
+                if (!result.success) {
+                    throw new Error(result.error || result.message || 'Upload failed');
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error('Upload to Google Drive failed:', error);
+                
+                // More detailed error information
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    throw new Error('Network error: Cannot connect to server. Check your internet connection and make sure the Google Apps Script is deployed correctly.');
+                }
+                
+                throw error;
+            }
+        }
+
+        // Show upload progress
+        function showUploadProgress() {
+            const button = document.getElementById('download-contract');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span>Uploading to Drive...</span>';
+            button.disabled = true;
+            return () => {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            };
+        }
+
+        // Test function to verify Google Apps Script connectivity
+        async function testGoogleScriptConnection() {
+            try {
+                console.log('Testing connection to Google Apps Script...');
+                
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        test: true,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('Connection test successful:', result);
+                return true;
+                
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                return false;
+            }
+        }
+
+        // Call this on page load to verify connectivity
+        document.addEventListener('DOMContentLoaded', function() {
+            testGoogleScriptConnection().then(success => {
+                if (!success) {
+                    console.warn('Google Apps Script connection test failed. Drive uploads may not work.');
+                }
+            });
+        });
 
         // Update the submitBookingInquiry function to include Google Sheets submission
         function submitBookingInquiry() {
@@ -778,6 +990,17 @@
                 }
             }
             
+            // Special validation for birthday - at least one birthday person must be specified
+            if (eventType === 'birthday') {
+                const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value.trim());
+                const hasBirthdayPerson = birthdayNames.some(name => name !== '');
+                if (!hasBirthdayPerson) {
+                    isValid = false;
+                    alert('Please provide at least one birthday person name');
+                    return;
+                }
+            }
+            
             // Validate signature
             if (signaturePad.isEmpty()) {
                 isValid = false;
@@ -807,6 +1030,7 @@
                 } else {
                     // Submission failed; do not generate contract
                     console.warn('Google Sheets submission failed; contract generation aborted.');
+                    alert('Failed to submit data. Please try again.');
                 }
             });
         }
@@ -860,6 +1084,15 @@
         }
 
         function generateBirthdayContract(formData, formattedEventDate, formattedCurrentDate, facility, tillNumber, contractContent) {
+            // Get birthday persons data
+            const birthdayNames = Array.from(document.querySelectorAll('input[name="birthday-name[]"]')).map(input => input.value).filter(name => name.trim() !== '');
+            const birthdayDOBs = Array.from(document.querySelectorAll('input[name="birthday-dob[]"]')).map(input => input.value).filter(dob => dob.trim() !== '');
+            
+            const birthdayPersons = birthdayNames.map((name, index) => {
+                const dob = birthdayDOBs[index] ? new Date(birthdayDOBs[index]).toLocaleDateString('en-GB') : 'N/A';
+                return `${name} (DOB: ${dob})`;
+            }).join(', ');
+
             // Create birthday contract HTML
             const contractHTML = `
                 <div class="space-y-4">
@@ -890,7 +1123,7 @@
                             </tr>
                             <tr>
                                 <td>4. Number of Persons: ${formData.get('attendees')}</td>
-                                <td></td>
+                                <td>Birthday Person(s): ${birthdayPersons}</td>
                                 <td></td>
                             </tr>
                         </table>
@@ -1281,20 +1514,39 @@
             contractContent.innerHTML = contractHTML;
         }
 
-        function downloadContract() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const contractElement = document.getElementById('contract-content');
+        // Updated download function with Google Drive upload
+        // Updated download function with better error handling
+        async function downloadContract() {
+            const resetButton = showUploadProgress();
             
-            // Capture the contract as an image
-            html2canvas(contractElement, {
-                scale: 2,
-                useCORS: true,
-                logging: false
-            }).then(canvas => {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const contractElement = document.getElementById('contract-content');
+                
+                // Get form data for metadata
+                const formData = new FormData(document.getElementById('booking-form'));
+                const clientData = {
+                    name: formData.get('client-name'),
+                    eventType: formData.get('event-type'),
+                    eventDate: formData.get('event-date'),
+                    facility: formData.get('facility'),
+                    contact: formData.get('contact'),
+                    email: formData.get('email'),
+                    attendees: formData.get('attendees')
+                };
+                
+                // Capture the contract as an image
+                const canvas = await html2canvas(contractElement, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                });
+                
                 const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 210; // A4 width in mm
-                const pageHeight = 295; // A4 height in mm
+                const imgWidth = 210;
+                const pageHeight = 295;
                 const imgHeight = canvas.height * imgWidth / canvas.width;
                 let heightLeft = imgHeight;
                 
@@ -1312,9 +1564,54 @@
                     heightLeft -= pageHeight;
                 }
                 
-                // Save the PDF
-                doc.save('Village-Market-Recreation-Agreement.pdf');
-            });
+                // Generate PDF and trigger upload
+                const pdfBlob = doc.output('blob');
+                const fileName = `Village-Market-Contract-${clientData.name}-${new Date().toISOString().split('T')[0]}.pdf`;
+                
+                // Convert blob to base64 for upload
+                const reader = new FileReader();
+                
+                reader.onload = async function() {
+                    const contractData = reader.result;
+                    
+                    try {
+                        console.log('Attempting to upload to Google Drive...');
+                        
+                        // Upload to Google Drive with timeout
+                        const uploadPromise = uploadToGoogleDrive(contractData, fileName, clientData);
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000)
+                        );
+                        
+                        await Promise.race([uploadPromise, timeoutPromise]);
+                        
+                        // Download to user's device
+                        doc.save(fileName);
+                        alert('Contract downloaded and saved to Drive successfully!');
+                        
+                    } catch (error) {
+                        console.error('Upload failed, downloading locally only:', error);
+                        // Fallback: download even if upload fails
+                        doc.save(fileName);
+                        alert('Contract downloaded locally. Drive upload failed: ' + error.message);
+                    }
+                };
+                
+                reader.onerror = function() {
+                    console.error('FileReader error');
+                    // Fallback: download without upload
+                    doc.save(fileName);
+                    alert('Contract downloaded locally. Could not prepare file for Drive upload.');
+                    resetButton();
+                };
+                
+                reader.readAsDataURL(pdfBlob);
+                
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('Error generating contract. Please try again.');
+                resetButton();
+            }
         }
     </script>
 </body>
