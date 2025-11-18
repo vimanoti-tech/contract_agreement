@@ -122,6 +122,13 @@
         .remove-birthday-person:hover {
             background: #dc2626;
         }
+        .time-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            background-color: white;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen py-8">
@@ -208,11 +215,11 @@
                         <label for="event-date" class="block text-sm font-bold text-gray-700">Event Date <span class="text-red-500">*</span></label>
                         <input type="text" id="event-date" name="event-date" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                     </div>
-                    <div>
+                    <div id="start-time-container">
                         <label for="start-time" class="block text-sm font-bold text-gray-700">Start Time <span class="text-red-500">*</span></label>
                         <input type="text" id="start-time" name="start-time" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                     </div>
-                    <div>
+                    <div id="end-time-container">
                         <label for="end-time" class="block text-sm font-bold text-gray-700">End Time <span class="text-red-500">*</span></label>
                         <input type="text" id="end-time" name="end-time" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" readonly>
                     </div>
@@ -222,24 +229,18 @@
                 <div id="time-slot-options" class="time-slot-options">
                     <h3 class="text-sm font-bold text-gray-700 mb-3">Select Time Slot</h3>
                     <div id="birthday-slots" class="space-y-2 hidden">
-                        <label class="flex items-center">
-                            <input type="radio" name="time-slot" value="morning" class="mr-2">
-                            <span>Morning Slot (10:00 AM – 1:00 PM)</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="time-slot" value="afternoon" class="mr-2">
-                            <span>Afternoon Slot (2:30 PM – 5:30 PM)</span>
-                        </label>
+                        <select id="birthday-time-slot" class="time-select">
+                            <option value="">Select Time Slot</option>
+                            <option value="10:00-13:00">Morning Slot (10:00 AM – 1:00 PM)</option>
+                            <option value="14:30-17:30">Afternoon Slot (2:30 PM – 5:30 PM)</option>
+                        </select>
                     </div>
                     <div id="school-trip-slots" class="space-y-2 hidden">
-                        <label class="flex items-center">
-                            <input type="radio" name="time-slot" value="morning" class="mr-2">
-                            <span>Morning Slot (10:00 AM – 12:00 PM)</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="time-slot" value="afternoon" class="mr-2">
-                            <span>Afternoon Slot (12:00 PM – 2:00 PM)</span>
-                        </label>
+                        <select id="school-trip-time-slot" class="time-select">
+                            <option value="">Select Time Slot</option>
+                            <option value="10:00-12:00">Morning Slot (10:00 AM – 12:00 PM)</option>
+                            <option value="12:00-14:00">Afternoon Slot (12:00 PM – 2:00 PM)</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -276,7 +277,7 @@
                         </label>
                         <label class="flex items-center">
                             <input type="checkbox" name="school-package" value="drinks" class="mr-2">
-                            <span>Drinks (KES 100)</span>
+                            <span>Drinks</span>
                         </label>
                     </div>
                 </div>
@@ -336,7 +337,7 @@
 
     <script>
     // Google Apps Script URL - MAKE SURE THIS IS CORRECT
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJIF7MS8aeIuzjmd8-HmsWsxGSpNWMwgDTJ1Qk8_X-za8MFKdmLXQPzE6fdsUfmQd-/exec';
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHRso0C0HY1PheOoOzKH4HQkWymLOxDi9Jc5isqDLA_DvAH1xV4SdGRSql_digs1o/exec';
 
     // Initialize date picker
     function setDatePickerForEventType(eventType) {
@@ -523,10 +524,12 @@
     });
 
     // Time slot selection event listeners
-    document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            applyTimeSlot();
-        });
+    document.getElementById('birthday-time-slot')?.addEventListener('change', function() {
+        applyTimeSlot('birthday', this.value);
+    });
+
+    document.getElementById('school-trip-time-slot')?.addEventListener('change', function() {
+        applyTimeSlot('school-trip', this.value);
     });
 
     // Update organization field based on event type
@@ -569,72 +572,77 @@
         const timeSlotOptions = document.getElementById('time-slot-options');
         const birthdaySlots = document.getElementById('birthday-slots');
         const schoolTripSlots = document.getElementById('school-trip-slots');
-        
+        const startContainer = document.getElementById('start-time-container');
+        const endContainer = document.getElementById('end-time-container');
+
         // Reset time fields
         document.getElementById('start-time').value = '';
         document.getElementById('end-time').value = '';
-        
+
         // Clear any selected time slots
-        document.querySelectorAll('input[name="time-slot"]').forEach(radio => {
-            radio.checked = false;
-        });
-        
+        document.getElementById('birthday-time-slot').value = '';
+        document.getElementById('school-trip-time-slot').value = '';
+
         if (eventType === 'birthday') {
             timeSlotOptions.style.display = 'block';
             birthdaySlots.classList.remove('hidden');
             schoolTripSlots.classList.add('hidden');
-            document.getElementById('start-time').setAttribute('readonly', 'true');
-            document.getElementById('end-time').setAttribute('readonly', 'true');
+            // Hide manual time inputs when using fixed time slots
+            startContainer.style.display = 'none';
+            endContainer.style.display = 'none';
+            // Remove any min/max constraints on the picker
+            startTimePicker.set('minTime', null);
+            startTimePicker.set('maxTime', null);
         } else if (eventType === 'school-trip') {
             timeSlotOptions.style.display = 'block';
             birthdaySlots.classList.add('hidden');
             schoolTripSlots.classList.remove('hidden');
-            document.getElementById('start-time').setAttribute('readonly', 'true');
-            document.getElementById('end-time').setAttribute('readonly', 'true');
+            // Hide manual time inputs when using fixed time slots
+            startContainer.style.display = 'none';
+            endContainer.style.display = 'none';
             // Restrict date picker to weekdays for school trips
             setDatePickerForEventType('school-trip');
+            startTimePicker.set('minTime', null);
+            startTimePicker.set('maxTime', null);
         } else if (eventType === 'hangout') {
             timeSlotOptions.style.display = 'none';
             birthdaySlots.classList.add('hidden');
             schoolTripSlots.classList.add('hidden');
-            // For hangout events, enable start time input
-            document.getElementById('start-time').removeAttribute('readonly');
+            // For hangout events, show start time input and auto-calc end time
+            startContainer.style.display = 'block';
+            endContainer.style.display = 'block';
             document.getElementById('end-time').setAttribute('readonly', 'true');
+            // Limit hangout start time between 09:00 and 19:00
+            startTimePicker.set('minTime', '09:00');
+            startTimePicker.set('maxTime', '19:00');
         } else {
             timeSlotOptions.style.display = 'none';
             birthdaySlots.classList.add('hidden');
             schoolTripSlots.classList.add('hidden');
-            // For other events, enable both time inputs
+            // For other events, show both time inputs
+            startContainer.style.display = 'block';
+            endContainer.style.display = 'block';
             document.getElementById('start-time').removeAttribute('readonly');
             document.getElementById('end-time').removeAttribute('readonly');
+            startTimePicker.set('minTime', null);
+            startTimePicker.set('maxTime', null);
         }
         // For non-school-trip event types, use default datepicker
         if (eventType !== 'school-trip') setDatePickerForEventType('');
     }
 
     // Apply selected time slot
-    function applyTimeSlot() {
-        const eventType = document.getElementById('event-type').value;
-        const selectedSlot = document.querySelector('input[name="time-slot"]:checked');
+    function applyTimeSlot(eventType, timeSlotValue) {
+        if (!timeSlotValue) return;
         
-        if (!selectedSlot) return;
+        const [startTime, endTime] = timeSlotValue.split('-');
         
-        if (eventType === 'birthday') {
-            if (selectedSlot.value === 'morning') {
-                document.getElementById('start-time').value = '10:00';
-                document.getElementById('end-time').value = '13:00';
-            } else if (selectedSlot.value === 'afternoon') {
-                document.getElementById('start-time').value = '14:30';
-                document.getElementById('end-time').value = '17:30';
-            }
-        } else if (eventType === 'school-trip') {
-            if (selectedSlot.value === 'morning') {
-                document.getElementById('start-time').value = '10:00';
-                document.getElementById('end-time').value = '12:00';
-            } else if (selectedSlot.value === 'afternoon') {
-                document.getElementById('start-time').value = '12:00';
-                document.getElementById('end-time').value = '14:00';
-            }
+        if (startTime && endTime) {
+            // Populate hidden/manual inputs so contract generation gets correct values
+            const startInput = document.getElementById('start-time');
+            const endInput = document.getElementById('end-time');
+            startInput.value = startTime;
+            endInput.value = endTime;
         }
     }
 
@@ -646,20 +654,76 @@
             const startTime = document.getElementById('start-time').value;
             if (startTime) {
                 const [hours, minutes] = startTime.split(':').map(Number);
-                let endHours = hours + 3;
-                
+                // Determine duration based on selected package
+                const pkg = (document.getElementById('package').value || '').toLowerCase();
+                let durationHours = 3; // default facility package
+                if (pkg.includes('half')) durationHours = 4;
+                if (pkg.includes('full')) durationHours = 6;
+
+                let endHours = hours + durationHours;
                 // Handle day rollover
-                if (endHours >= 24) {
-                    endHours -= 24;
-                }
-                
-                // Format to two digits
+                if (endHours >= 24) endHours -= 24;
+
                 const formattedEndHours = endHours.toString().padStart(2, '0');
                 const formattedEndMinutes = minutes.toString().padStart(2, '0');
-                
                 document.getElementById('end-time').value = `${formattedEndHours}:${formattedEndMinutes}`;
             }
         }
+    }
+
+    // Reset the booking form and UI to initial state
+    function resetFormAndUI() {
+        const form = document.getElementById('booking-form');
+        if (form) form.reset();
+
+        // Reset birthday persons: keep only the first and clear its inputs
+        const container = document.getElementById('birthday-persons-container');
+        if (container) {
+            const persons = Array.from(container.querySelectorAll('.birthday-person'));
+            persons.forEach((p, idx) => {
+                if (idx === 0) {
+                    p.querySelectorAll('input').forEach(i => i.value = '');
+                } else {
+                    p.remove();
+                }
+            });
+        }
+
+        // Clear signature pad
+        try {
+            signaturePad.clear();
+            resizeCanvas();
+        } catch (e) {
+            // ignore if signaturePad not available
+            console.warn('Signature pad reset skipped', e);
+        }
+
+        // Clear pickers
+        try {
+            if (startTimePicker) startTimePicker.clear();
+            if (endTimePicker) endTimePicker.clear();
+        } catch (e) {}
+        const dateInput = document.getElementById('event-date');
+        if (dateInput && dateInput._flatpickr) dateInput._flatpickr.clear();
+
+        // Reset UI sections
+        const orgField = document.getElementById('organization-field'); if (orgField) orgField.style.display = 'none';
+        const bdayField = document.getElementById('birthday-field'); if (bdayField) bdayField.style.display = 'none';
+        const schoolOptions = document.getElementById('school-trip-options'); if (schoolOptions) schoolOptions.style.display = 'none';
+        const timeSlotOptions = document.getElementById('time-slot-options'); if (timeSlotOptions) timeSlotOptions.style.display = 'none';
+
+        // Ensure time inputs visible/default
+        const startContainer = document.getElementById('start-time-container'); if (startContainer) startContainer.style.display = 'block';
+        const endContainer = document.getElementById('end-time-container'); if (endContainer) endContainer.style.display = 'block';
+
+        // Reset package select and cost
+        const packageSelect = document.getElementById('package');
+        if (packageSelect) {
+            packageSelect.innerHTML = '<option value="">Select Package</option>';
+            packageSelect.style.display = 'block';
+            packageSelect.required = true;
+        }
+        const costInput = document.getElementById('cost-per-person'); if (costInput) costInput.value = 2400;
     }
 
     // Update package options based on facility and event type
@@ -695,6 +759,8 @@
             // Set default package and cost
             packageSelect.value = "Facility Package";
             document.getElementById('cost-per-person').value = hangoutPackages["Facility Package"];
+            // Recalculate end time if start time is already set
+            updateEndTime();
         } else {
             packageSelect.style.display = 'block';
             packageSelect.required = true;
@@ -714,6 +780,8 @@
                 if (facilityPackages[facility].length > 0) {
                     packageSelect.value = facilityPackages[facility][0].name;
                     document.getElementById('cost-per-person').value = facilityPackages[facility][0].cost;
+                    // Recalculate end time if start time is set
+                    updateEndTime();
                 }
             }
         }
@@ -769,6 +837,8 @@
         if (selectedOption && selectedOption.dataset.cost) {
             document.getElementById('cost-per-person').value = selectedOption.dataset.cost;
         }
+        // Recalculate end time when package changes (affects hangout durations)
+        updateEndTime();
     });
 
     // Submit booking data to Google Sheets
@@ -804,7 +874,9 @@
                 'Organisation/Institution': toUpperExceptEmail(formData.get('organization'), 'Organisation/Institution'),
                 'Birthday Persons': toUpperExceptEmail(birthdayPersons, 'Birthday Persons'),
                 'Start Time': toUpperExceptEmail(formData.get('start-time'), 'Start Time'),
+                'End Time': toUpperExceptEmail(formData.get('end-time'), 'End Time'),
                 'Number of Persons (PAX)': toUpperExceptEmail(formData.get('attendees'), 'Number of Persons (PAX)'),
+                'Cost Per Person': toUpperExceptEmail(document.getElementById('cost-per-person').value, 'Cost Per Person'),
                 'Notes': toUpperExceptEmail(formData.get('notes'), 'Notes')
             };
 
@@ -849,10 +921,6 @@
         
         return selectedPackages.join(', ') || 'None';
     }
-
-
-
-
 
     // Update the submitBookingInquiry function
     function submitBookingInquiry() {
@@ -910,26 +978,14 @@
             return;
         }
         
-        // Get form data
-        const formData = new FormData(document.getElementById('booking-form'));
+        // Generate contract
+        generateContract();
 
-        // Submit to Google Sheets first, then generate contract
-        submitToGoogleSheets(formData).then(success => {
-            if (success) {
-                // Generate contract
-                generateContract();
+        // Show contract container
+        document.getElementById('contract-container').style.display = 'block';
 
-                // Show contract container
-                document.getElementById('contract-container').style.display = 'block';
-
-                // Scroll to contract
-                document.getElementById('contract-container').scrollIntoView({ behavior: 'smooth' });
-            } else {
-                // Submission failed; do not generate contract
-                console.warn('Google Sheets submission failed; contract generation aborted.');
-                alert('Failed to submit data. Please try again.');
-            }
-        });
+        // Scroll to contract
+        document.getElementById('contract-container').scrollIntoView({ behavior: 'smooth' });
     }
 
     function generateContract() {
@@ -1031,7 +1087,7 @@
                         <li>Party host and FNB Person</li>
                         <li>Parking validation for 2 car & 1 gift voucher for birthday child</li>
                         <li>Tables & chairs set up in Format to be communicated</li>
-                        <li>Kiddie meal for a pax of ${formData.get('attendees')}</li>
+                        ${(/kiddie fiesta|immersive delights/i.test(formData.get('package') || '') ) ? ('<li>Kiddie meal for a pax of ' + formData.get('attendees') + '</li>') : ''}
                     </ol>
                 </div>
                 
@@ -1411,16 +1467,24 @@
         contractContent.innerHTML = contractHTML;
     }
 
-    // Updated download function with Google Drive upload
-    // Download contract as PDF (local only)
+    // Updated download function with Google Sheets submission
     async function downloadContract() {
         try {
+            // First, submit data to Google Sheets
+            const formData = new FormData(document.getElementById('booking-form'));
+            const sheetsSuccess = await submitToGoogleSheets(formData);
+            
+            if (!sheetsSuccess) {
+                alert('Failed to submit data to Google Sheets. Contract download aborted.');
+                return;
+            }
+            
+            // Then generate PDF
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             const contractElement = document.getElementById('contract-content');
             
             // Get client name for filename
-            const formData = new FormData(document.getElementById('booking-form'));
             const clientName = formData.get('client-name');
             
             // Capture the contract as an image
@@ -1453,8 +1517,55 @@
             
             // Download to user's device
             const fileName = `Village-Market-Contract-${clientName}-${new Date().toISOString().split('T')[0]}.pdf`;
+            // Get PDF as Blob and base64
+            const pdfBlob = doc.output('blob');
             doc.save(fileName);
-            alert('Contract downloaded successfully!');
+
+            // Read PDF as base64 and upload to Google Apps Script
+            const reader = new FileReader();
+            reader.onloadend = async function() {
+                const base64data = reader.result.split(',')[1];
+                // Prepare payload for upload
+                const uploadPayload = {
+                    action: 'uploadContract',
+                    contractData: 'data:application/pdf;base64,' + base64data,
+                    fileName: fileName,
+                    clientData: {
+                        'Event Date': formData.get('event-date'),
+                        'Package': formData.get('package'),
+                        'Facility': formData.get('facility'),
+                        'Event Type': formData.get('event-type'),
+                        'Client Name': formData.get('client-name'),
+                        'Contact Number': formData.get('contact'),
+                        'Email Address': formData.get('email'),
+                        'Organisation/Institution': formData.get('organization'),
+                        'Start Time': formData.get('start-time'),
+                        'End Time': formData.get('end-time'),
+                        'Number of Persons (PAX)': formData.get('attendees'),
+                        'Cost Per Person': document.getElementById('cost-per-person').value,
+                        'Notes': formData.get('notes')
+                    }
+                };
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(uploadPayload)
+                    });
+                } catch (e) {
+                    console.error('Drive upload failed', e);
+                }
+            };
+            reader.readAsDataURL(pdfBlob);
+
+            // Immediately hide the preview and clear its content so it disappears on download
+            const contractContainerEl = document.getElementById('contract-container');
+            if (contractContainerEl) contractContainerEl.style.display = 'none';
+            const contractContentEl = document.getElementById('contract-content');
+            if (contractContentEl) contractContentEl.innerHTML = '';
+            // Reset the form and UI
+            try { resetFormAndUI(); } catch (e) { console.warn('resetFormAndUI failed', e); }
+            alert('Contract downloaded, uploaded to Drive, and a copy shared with the Village Market Events Team!');
             
         } catch (error) {
             console.error('Error generating PDF:', error);
