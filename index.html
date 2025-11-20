@@ -922,11 +922,38 @@
         return selectedPackages.join(', ') || 'None';
     }
 
+    // Add time slot validation when the form is submitted
+    function validateTimeSlots(eventType) {
+        if (eventType === 'birthday') {
+            const birthdaySlot = document.getElementById('birthday-time-slot').value;
+            if (!birthdaySlot) {
+                alert('Please select a birthday time slot');
+                return false;
+            }
+            applyTimeSlot('birthday', birthdaySlot);
+        } else if (eventType === 'school-trip') {
+            const schoolTripSlot = document.getElementById('school-trip-time-slot').value;
+            if (!schoolTripSlot) {
+                alert('Please select a school trip time slot');
+                return false;
+            }
+            applyTimeSlot('school-trip', schoolTripSlot);
+        }
+        return true;
+    }
+
     // Update the submitBookingInquiry function
     function submitBookingInquiry() {
         // Validate form
         const eventType = document.getElementById('event-type').value;
         let isValid = true;
+
+        // Validate time slots first
+        if (eventType === 'birthday' || eventType === 'school-trip') {
+            if (!validateTimeSlots(eventType)) {
+                return;
+            }
+        }
         
         // Get all required fields
         const requiredFields = document.querySelectorAll('#booking-form [required]');
@@ -934,6 +961,12 @@
         requiredFields.forEach(field => {
             // Skip validation for package field if it's a school trip
             if (eventType === 'school-trip' && field.id === 'package') {
+                return;
+            }
+            
+            // Skip validation for start/end time if using time slots
+            if ((eventType === 'birthday' || eventType === 'school-trip') && 
+                (field.id === 'start-time' || field.id === 'end-time')) {
                 return;
             }
             
